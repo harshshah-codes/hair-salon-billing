@@ -1,5 +1,6 @@
 /vendor/
 /.env
+/storage/
 /node_modules/
 /uploads/*
 !/uploads/.gitkeep

@@ -18,15 +18,20 @@ class Database
     public function __construct(array $config)
     {
         $autoCreate = (bool) ($config['auto_create'] ?? true);
+        $identity   = ['host' => $config['host'], 'port' => $config['port'], 'database' => $config['database']];
 
         try {
             $this->pdo = $this->connect($config, true);
+            Logger::info('Database connected', $identity);
         } catch (PDOException $e) {
             // Auto-create the database when the server is up but the
             // database does not exist yet (MySQL error 1049 / 1044).
             if (!$autoCreate || ($e->getCode() !== '1049' && $e->getCode() !== '1044')) {
+                Logger::error('Database connection failed', $identity + ['code' => $e->getCode(), 'error' => $e->getMessage()]);
                 $this->fail($e);
             }
+
+            Logger::warning('Database not found — attempting auto-create', $identity);
 
             try {
                 $admin = $this->connect($config, false);
@@ -38,7 +43,9 @@ class Database
                 ));
                 $admin = null;
                 $this->pdo = $this->connect($config, true);
+                Logger::info('Database created', $identity);
             } catch (PDOException $e) {
+                Logger::error('Database auto-create failed', $identity + ['code' => $e->getCode(), 'error' => $e->getMessage()]);
                 $this->fail($e);
             }
         }
@@ -46,6 +53,8 @@ class Database
         if ($autoCreate) {
             $this->installIfEmpty();
         }
+
+        $this->logSchemaStatus();
     }
 
     /**
@@ -59,8 +68,11 @@ class Database
         )->fetchColumn();
 
         if ($tables > 0) {
+            Logger::info('Auto-install skipped — database already has tables', ['tables' => $tables]);
             return;
         }
+
+        Logger::info('Auto-install triggered — empty database');
 
         foreach (['schema.sql', 'seed.sql'] as $file) {
             $path = BASE_PATH . '/database/' . $file;
@@ -69,6 +81,7 @@ class Database
                 throw new \RuntimeException("Could not read database file: {$path}");
             }
             $this->pdo->exec($sql);
+            Logger::info("Applied {$file}");
         }
 
         $role = $this->pdo->query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")->fetch();
@@ -81,6 +94,48 @@ class Database
                  ON DUPLICATE KEY UPDATE role_id = VALUES(role_id), password = VALUES(password)"
             );
             $stmt->execute([(int) $role['id'], $email, password_hash($password, PASSWORD_DEFAULT)]);
+            Logger::info('Admin account ready', ['email' => $email]);
+        }
+    }
+
+    /**
+     * Compare the tables declared in schema.sql with those present in the
+     * database and log any mismatch.
+     */
+    private function logSchemaStatus(): void
+    {
+        if (!defined('BASE_PATH')) {
+            return;
+        }
+
+        $path = BASE_PATH . '/database/schema.sql';
+        $sql  = file_get_contents($path);
+        if ($sql === false) {
+            Logger::warning('Schema check failed — could not read schema.sql', ['path' => $path]);
+            return;
+        }
+
+        preg_match_all('/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?`([a-z0-9_]+)`/i', $sql, $matches);
+        $expected = array_values(array_unique($matches[1] ?? []));
+
+        if (!$expected) {
+            return;
+        }
+
+        $actual = $this->pdo->query(
+            'SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()'
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        $missing = array_values(array_diff($expected, $actual));
+        $extra   = array_values(array_diff($actual, $expected));
+
+        if ($missing || $extra) {
+            Logger::warning(
+                'Schema mismatch detected',
+                array_filter(['expected' => count($expected), 'actual' => count($actual), 'missing' => $missing, 'extra' => $extra])
+            );
+        } else {
+            Logger::info('Schema OK', ['tables' => count($actual)]);
         }
     }
 
@@ -111,6 +166,7 @@ class Database
 
     private function fail(PDOException $e): never
     {
+        Logger::error('Database failure', ['code' => $e->getCode(), 'error' => $e->getMessage()]);
         if (App::config('app.debug', false)) {
             throw $e;
         }
