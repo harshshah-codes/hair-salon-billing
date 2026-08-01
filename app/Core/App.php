@@ -44,10 +44,17 @@ final class App
 
     public function setting(string $key, $default = null)
     {
-        $row = $this->db->fetch(
-            'SELECT `value` FROM `settings` WHERE `key` = ?',
-            [$key]
-        );
-        return $row ? $row['value'] : $default;
+        if (!isset($this->db)) {
+            return $default;
+        }
+        try {
+            $row = $this->db->fetch(
+                'SELECT `value` FROM `settings` WHERE `key` = ?',
+                [$key]
+            );
+            return $row ? $row['value'] : $default;
+        } catch (\Throwable $e) {
+            return $default;
+        }
     }
 }
