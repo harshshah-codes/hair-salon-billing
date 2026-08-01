@@ -119,7 +119,7 @@
                     </div>
                     <div class="total-row"><span class="text-muted">Balance After Billing</span><span class="fw-semibold text-success" id="tBalanceAfter">₹0.00</span></div>
                     <div class="total-row"><span class="text-muted">Outstanding</span><span class="fw-semibold text-danger" id="tOutstanding">₹0.00</span></div>
-                    <div class="total-row grand"><span>Amount Payable</span><span class="amount" id="tPayable">₹0.00</span></div>
+                    <div class="total-row grand"><span>Balance</span><span class="amount" id="tPayable">₹0.00</span></div>
                 </div>
 
                 <!-- Payments -->
@@ -130,13 +130,14 @@
                     </div>
                     <div id="paymentRows"></div>
                     <div class="d-flex justify-content-between small mt-2 pt-2 border-top">
-                        <span class="text-muted">Total Received</span>
-                        <span class="fw-bold" id="tReceived">₹0.00</span>
+                        <span class="text-muted">Payment</span>
+                        <span class="fw-semibold text-success" id="tReceived">₹0.00</span>
                     </div>
                     <div class="d-flex justify-content-between small text-muted">
-                        <span>Balance Due</span>
-                        <span class="fw-semibold" id="tDue">₹0.00</span>
+                        <span>Balance</span>
+                        <span class="fw-bold" id="tDue">₹0.00</span>
                     </div>
+                    <div class="text-danger small mt-1 d-none" id="payError"><i class="fa-solid fa-circle-exclamation me-1"></i><span id="payErrorMsg"></span></div>
                 </div>
 
                 <div class="mb-3">

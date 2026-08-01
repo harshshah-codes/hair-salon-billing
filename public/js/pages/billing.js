@@ -90,10 +90,14 @@
             $('#pkgAvailable').text(money(c.credits));
             $('#pkgName').text('Credits available');
             $('#tUsePackage').prop('disabled', false);
+            $('#tUsePackage').prop('checked', true);
+            $('#pkgRow').show();
+            state.usePackage = true;
         } else {
             $('#pkgAvailable').text('₹0.00');
             $('#pkgName').text('—');
             $('#tUsePackage').prop('disabled', true).prop('checked', false);
+            $('#pkgRow').hide();
             state.usePackage = false;
         }
         $('#tOutstanding').text(money(c.outstanding));
@@ -107,6 +111,8 @@
         $('#pkgAvailable').text('₹0.00');
         $('#pkgName').text('—');
         $('#tUsePackage').prop('disabled', true).prop('checked', false);
+        $('#pkgRow').hide();
+        state.usePackage = false;
         recalc();
     });
 
@@ -314,12 +320,14 @@
         $('.pay-amount').each(function () {
             received += parseFloat($(this).val()) || 0;
         });
-        if (received > payable) {
-            received = payable;
-        }
-        $('#tReceived').text(money(received));
+        const overpaid = received > payable && payable > 0;
+        $('#tReceived').text(money(overpaid ? payable : received));
         $('#tDue').text(money(Math.max(0, payable - received)));
-        return { payable, received };
+        $('#payError').toggleClass('d-none', !overpaid);
+        if (overpaid) {
+            $('#payErrorMsg').text('Payments exceed the balance of ' + money(payable) + '. Amount is limited to the payable balance.');
+        }
+        return { payable, received, overpaid };
     }
 
     /* ---------- Totals ---------- */
@@ -331,9 +339,8 @@
         const total = subtotal - state.discount + gstAmount;
 
         let available = state.customer ? parseFloat(state.customer.credits) || 0 : 0;
-        if (state.usePackage) {
-            let used = parseFloat($('#tPackageUsed').val()) || 0;
-            used = Math.min(used, total, available);
+        if (state.usePackage && available > 0) {
+            let used = Math.min(total, available);
             if (used !== state.packageUsed) {
                 state.packageUsed = used;
                 $('#tPackageUsed').val(used.toFixed(2));
@@ -420,6 +427,13 @@
                 Swal.fire({ icon: 'warning', title: 'Allocation incomplete', text: 'Complete employee allocation for "' + item.name + '".' });
                 return;
             }
+        }
+
+        const payable = calc();
+        const received = collectPayments().reduce((s, p) => s + p.amount, 0);
+        if (received > payable) {
+            Swal.fire({ icon: 'error', title: 'Payments exceed balance', text: 'Payments of ' + money(received) + ' exceed the balance of ' + money(payable) + '.' });
+            return;
         }
 
         Swal.fire({

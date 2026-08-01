@@ -50,14 +50,23 @@ class BillingController extends Controller
         $summary = $repo->summary($id);
         $outstanding = max(0, round((float)($summary['ledger_billed'] ?? 0) - (float)($summary['ledger_paid'] ?? 0), 2));
         $packages = $this->db->fetchAll(
-            "SELECT cp.`id`, cp.`name`, cp.`remaining_credits`, cp.`credits`, cp.`value_per_credit`,
-                (cp.`remaining_credits` * cp.`value_per_credit`) AS balance_value,
-                cp.`expires_on`
+            "SELECT cp.`id`, cp.`name`, cp.`remaining_credits`, cp.`credits`, cp.`selling_price`,
+                cp.`value_per_credit`, cp.`expires_on`
              FROM customer_packages cp
              WHERE cp.`customer_id` = ? AND cp.`status` = 'active' AND cp.`deleted_at` IS NULL
+               AND (cp.`expires_on` IS NULL OR cp.`expires_on` >= CURDATE())
              ORDER BY cp.`id` DESC",
             [$id]
         );
+
+        $balanceValue = 0.0;
+        foreach ($packages as $pkg) {
+            $vpc = (float) ($pkg['value_per_credit'] ?? 0);
+            if ($vpc <= 0 && (float) ($pkg['credits'] ?? 0) > 0) {
+                $vpc = (float) ($pkg['selling_price'] ?? 0) / (float) $pkg['credits'];
+            }
+            $balanceValue += (float) ($pkg['remaining_credits'] ?? 0) * $vpc;
+        }
 
         $this->json([
             'success' => true,
@@ -68,7 +77,7 @@ class BillingController extends Controller
                 'email' => $customer['email'],
                 'photo' => $customer['photo'],
                 'outstanding' => $outstanding,
-                'credits' => (float) ($summary['current_credits'] ?? 0),
+                'credits' => round($balanceValue, 2),
                 'last_visit' => $customer['last_visit_at'],
                 'packages' => $packages,
             ],
