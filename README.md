@@ -126,6 +126,26 @@ php -S 127.0.0.1:8000 -t public
 
 > Default seeded data: 3 roles (Admin, Manager, Front Desk), 10 services, 5 packages, 6 employees, and default settings (business info, invoice prefix `INV-`, GST 18%).
 
+### One-shot scripts
+
+**Seed the database** (creates DB if missing, applies schema + seed, creates/updates the admin user — no need to visit `install.php`):
+
+```bash
+php scripts/seed.php                          # admin@salon.local / admin123
+php scripts/seed.php owner@salon.com "mypass" # custom admin
+```
+
+**Run locally** (seeds, then starts the built-in server):
+
+```bash
+./scripts/serve.sh                  # http://127.0.0.1:8000
+PORT=9000 ./scripts/serve.sh        # custom port
+SKIP_SEED=1 ./scripts/serve.sh      # skip re-seeding
+```
+
+> If `pdo_mysql` isn't loaded, pass its ini directory:
+> `PHP_INI_SCAN_DIR=/path/to/phpconf ./scripts/serve.sh`
+
 ---
 
 ## Deployment
