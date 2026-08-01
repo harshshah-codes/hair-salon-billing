@@ -156,7 +156,7 @@ Full production deployment guide (shared hosting cPanel, VPS with Apache + MySQL
 
 ## Configuration
 
-Environment variables (set via your server/`.env` provider — no `.env` file loader is bundled; use the web-server env or `putenv` if needed):
+Environment variables are read from a `.env` file at the project root (copy `.env.example` → `.env`) or from real server env vars:
 
 | Variable      | Default                  | Description               |
 |---------------|--------------------------|---------------------------|
