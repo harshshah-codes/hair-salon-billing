@@ -65,14 +65,14 @@ class Validator
                 if (in_array($rule, ['required', 'nullable'], true)) {
                     continue;
                 }
-                $this->applyRule($field, $label, $rule, $value, $data);
+                $this->applyRule($field, $label, $rule, $value, $data, $ruleList);
             }
         }
 
         return empty($this->errors);
     }
 
-    private function applyRule(string $field, string $label, string $rule, $value, array $data): void
+    private function applyRule(string $field, string $label, string $rule, $value, array $data, array $ruleList): void
     {
         [$ruleName, $param] = array_pad(explode(':', $rule, 2), 2, null);
 
@@ -103,17 +103,21 @@ class Validator
                 }
                 break;
             case 'min':
-                if (is_numeric($value) && (float) $value < (float) $param) {
-                    $this->addError($field, str_replace(':param', $param, $this->messages['min']), $field);
+                if ($this->isNumericField($ruleList)) {
+                    if (is_numeric($value) && (float) $value < (float) $param) {
+                        $this->addError($field, $this->messageWithParam('min', $param, $label));
+                    }
                 } elseif (is_string($value) && mb_strlen($value) < (int) $param) {
-                    $this->addError($field, str_replace(':param', $param, $this->messages['min']), $field);
+                    $this->addError($field, $this->messageWithParam('min', $param, $label));
                 }
                 break;
             case 'max':
-                if (is_numeric($value) && (float) $value > (float) $param) {
-                    $this->addError($field, str_replace(':param', $param, $this->messages['max']), $field);
+                if ($this->isNumericField($ruleList)) {
+                    if (is_numeric($value) && (float) $value > (float) $param) {
+                        $this->addError($field, $this->messageWithParam('max', $param, $label));
+                    }
                 } elseif (is_string($value) && mb_strlen($value) > (int) $param) {
-                    $this->addError($field, str_replace(':param', $param, $this->messages['max']), $field);
+                    $this->addError($field, $this->messageWithParam('max', $param, $label));
                 }
                 break;
             case 'decimal':
@@ -129,7 +133,8 @@ class Validator
             case 'in':
                 $allowed = array_map('trim', explode(',', (string) $param));
                 if (!in_array($value, $allowed, false)) {
-                    $this->addError($field, str_replace(':param', implode(', ', $allowed), $this->messages['in']), $field);
+                    $message = str_replace(':param', implode(', ', $allowed), $this->messages['in']);
+                    $this->addError($field, sprintf($message, $label));
                 }
                 break;
             case 'confirmed':
@@ -174,6 +179,16 @@ class Validator
                 }
                 break;
         }
+    }
+
+    private function isNumericField(array $ruleList): bool
+    {
+        return in_array('numeric', $ruleList, true) || in_array('integer', $ruleList, true);
+    }
+
+    private function messageWithParam(string $ruleName, $param, string $label): string
+    {
+        return sprintf(str_replace(':param', $param, $this->messages[$ruleName]), $label);
     }
 
     private function addError(string $field, string $message): void

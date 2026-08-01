@@ -86,8 +86,7 @@ if (!function_exists('old')) {
     function old(string $key, $default = null)
     {
         $session = new Session();
-        $old = $session->old();
-        return $old[$key] ?? $default;
+        return $session->old($key, $default);
     }
 }
 
