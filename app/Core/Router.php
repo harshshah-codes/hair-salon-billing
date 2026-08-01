@@ -83,6 +83,35 @@ class Router
             $this->response->abort(500, "Controller not found: $controllerClass");
         }
         $controller = new $controllerClass();
-        $controller->{$method}(...array_values($params));
+        $args = $this->castParams($controller, $method, array_values($params));
+        $controller->{$method}(...$args);
+    }
+
+    private function castParams(object $controller, string $method, array $params): array
+    {
+        try {
+            $reflection = new \ReflectionMethod($controller, $method);
+        } catch (\ReflectionException) {
+            return $params;
+        }
+
+        $args = [];
+        foreach ($reflection->getParameters() as $i => $param) {
+            if (!array_key_exists($i, $params)) {
+                break;
+            }
+            $value = $params[$i];
+            $type = $param->getType();
+            if ($type instanceof \ReflectionNamedType) {
+                $name = $type->getName();
+                if ($name === 'int') {
+                    $value = (int) $value;
+                } elseif ($name === 'float') {
+                    $value = (float) $value;
+                }
+            }
+            $args[] = $value;
+        }
+        return $args;
     }
 }

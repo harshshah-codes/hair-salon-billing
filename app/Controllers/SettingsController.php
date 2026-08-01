@@ -47,7 +47,7 @@ final class SettingsController extends Controller
 
         try {
             switch ($section) {                case 'business':
-                    $this->validate([
+                    $this->validateRequest([
                         'business_name'    => 'required|max:120',
                         'business_phone'   => 'nullable|max:20',
                         'business_email'   => 'nullable|email|max:190',
@@ -59,7 +59,7 @@ final class SettingsController extends Controller
                     break;
 
                 case 'invoice':
-                    $this->validate([
+                    $this->validateRequest([
                         'invoice_prefix' => 'required|max:20',
                     ]);
                     $this->service->saveInvoiceSettings($this->request->all());
@@ -74,7 +74,7 @@ final class SettingsController extends Controller
                     break;
 
                 case 'user_create':
-                    $data = $this->validate([
+                    $data = $this->validateRequest([
                         'name'      => 'required|max:120',
                         'email'     => 'required|email|max:190|unique:users,email',
                         'phone'     => 'nullable|phone|max:20',
@@ -88,7 +88,7 @@ final class SettingsController extends Controller
 
                 case 'user_update':
                     $id = (int)$this->request->post('id', 0);
-                    $data = $this->validate([
+                    $data = $this->validateRequest([
                         'name'      => 'required|max:120',
                         'email'     => 'required|email|max:190|unique:users,email,' . $id,
                         'phone'     => 'nullable|phone|max:20',

@@ -63,6 +63,22 @@ abstract class Controller
     }
 
     /**
+     * Validate the current request against rules, bail to the previous
+     * page on failure (preserving input), and return the sanitized data.
+     */
+    protected function validateRequest(array $rules): array
+    {
+        $errors = $this->validate($this->request->all(), $rules);
+        if (!empty($errors)) {
+            $this->session->setErrors($errors);
+            $this->session->setOld($this->request->all());
+            $this->session->flash('error', 'Please fix the highlighted fields and try again.');
+            $this->back();
+        }
+        return array_intersect_key($this->request->all(), array_flip(array_keys($rules)));
+    }
+
+    /**
      * Validate and bail to the previous page on failure, preserving input.
      */
     protected function validateOrFail(array $data, array $rules): void

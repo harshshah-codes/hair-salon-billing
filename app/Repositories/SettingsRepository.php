@@ -10,7 +10,7 @@ final class SettingsRepository extends BaseRepository
 {
     protected string $table = 'settings';
 
-    public function all(): array
+    public function all(string $orderBy = 'created_at DESC'): array
     {
         $rows = $this->db->query('SELECT `key`, `value` FROM settings')->fetchAll();
         $map = [];

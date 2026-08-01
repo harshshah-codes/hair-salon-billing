@@ -10,6 +10,7 @@ use App\Models\CustomerNote;
 use App\Repositories\ActivityLogRepository;
 use App\Repositories\CustomerPackageRepository;
 use App\Repositories\CustomerRepository;
+use App\Repositories\PackageRepository;
 use App\Services\ActivityService;
 use App\Services\CustomerService;
 
@@ -111,15 +112,34 @@ final class CustomerController extends Controller
         $recentInvoices = $this->repo->recentInvoices((int)$id, 5);
         $notes = $this->service->notes((int)$id);
 
+        foreach ($packages as &$pkg) {
+            $pkg['balance_value'] = round((float) ($pkg['remaining_credits'] ?? 0) * (float) ($pkg['value_per_credit'] ?? 0), 2);
+            $pkg['days_left'] = $pkg['expires_on']
+                ? (int) floor((strtotime($pkg['expires_on']) - time()) / 86400)
+                : 999;
+        }
+        unset($pkg);
+
+        $stats = [
+            'lifetime_spend' => round((float) ($summary['ledger_billed'] ?? 0), 2),
+            'visits'         => (int) ($summary['total_visits'] ?? 0),
+            'credits'        => round((float) ($summary['current_credits'] ?? 0), 2),
+            'outstanding'    => max(0, round((float) ($summary['ledger_billed'] ?? 0) - (float) ($summary['ledger_paid'] ?? 0), 2)),
+        ];
+
         $this->view('customers/show', [
             'pageTitle'      => $customer['name'],
             'active'         => 'customers',
             'breadcrumbs'    => ['Customers' => '/customers', $customer['name'] => ''],
             'customer'       => $customer,
             'summary'        => $summary,
-            'packages'       => $packages,
+            'stats'          => $stats,
+            'allPackages'    => $packages,
+            'activePackages' => array_values(array_filter($packages, static fn ($p) => ($p['status'] ?? '') === 'active')),
+            'invoices'       => $billingHistory['items'] ?? [],
+            'templates'      => (new PackageRepository())->active(),
             'billingHistory' => $billingHistory,
-            'ledger'         => $ledger,
+            'ledger'         => $ledger['items'] ?? [],
             'recentServices' => $recentServices,
             'recentInvoices' => $recentInvoices,
             'notes'          => $notes,

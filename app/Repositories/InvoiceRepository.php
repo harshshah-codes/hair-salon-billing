@@ -26,24 +26,39 @@ final class InvoiceRepository extends BaseRepository
     public function items(int $invoiceId): array
     {
         $stmt = $this->db->prepare(
-            "SELECT ii.*, s.category AS service_category,
-                    (SELECT COALESCE(JSON_ARRAYAGG(
-                        JSON_OBJECT('employee_id', a.employee_id, 'employee_name', e.name, 'amount', a.amount)
-                     ), JSON_ARRAY())
-                     FROM employee_allocations a
-                     LEFT JOIN employees e ON e.id = a.employee_id
-                     WHERE a.invoice_item_id = ii.id) AS allocations
+            "SELECT ii.*, s.category AS service_category
              FROM invoice_items ii
              LEFT JOIN services s ON s.id = ii.service_id
              WHERE ii.invoice_id = ?"
         );
         $stmt->execute([$invoiceId]);
         $items = $stmt->fetchAll();
-        foreach ($items as &$item) {
-            $decoded = json_decode((string)$item['allocations'], true);
-            $item['allocations'] = is_array($decoded) ? $decoded : [];
+
+        if ($items !== []) {
+            $ids = array_column($items, 'id');
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $allocStmt = $this->db->prepare(
+                "SELECT a.invoice_item_id, a.employee_id, e.name AS employee_name, a.amount
+                 FROM employee_allocations a
+                 LEFT JOIN employees e ON e.id = a.employee_id
+                 WHERE a.invoice_item_id IN ({$placeholders})
+                 ORDER BY a.id ASC"
+            );
+            $allocStmt->execute($ids);
+            $allocations = [];
+            foreach ($allocStmt->fetchAll() as $a) {
+                $allocations[$a['invoice_item_id']][] = [
+                    'employee_id'   => (int) $a['employee_id'],
+                    'employee_name' => $a['employee_name'],
+                    'amount'        => (float) $a['amount'],
+                ];
+            }
+            foreach ($items as &$item) {
+                $item['allocations'] = $allocations[$item['id']] ?? [];
+            }
+            unset($item);
         }
-        unset($item);
+
         return $items;
     }
 
