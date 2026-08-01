@@ -50,6 +50,13 @@ class Logger
             PHP_EOL
         );
 
-        @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+        if (@file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) {
+            @mkdir($dir, 0775, true);
+            @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+        }
+
+        // Always mirror to the PHP error log / server stderr so logs are
+        // visible even when the file is not writable (e.g. php -S terminal).
+        @error_log(trim($line), 3, 'php://stderr');
     }
 }
