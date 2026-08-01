@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Core\App;
-use App\Core\CSRF;
 use App\Core\Session;
 
 if (!function_exists('e')) {
@@ -33,14 +32,53 @@ if (!function_exists('redirect')) {
 if (!function_exists('csrf_token')) {
     function csrf_token(): string
     {
-        return CSRF::token();
+        if (empty($_SESSION['_csrf'])) {
+            $_SESSION['_csrf'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['_csrf'];
     }
 }
 
 if (!function_exists('csrf_field')) {
     function csrf_field(): string
     {
-        return CSRF::field();
+        return '<input type="hidden" name="_token" value="' . e(csrf_token()) . '">';
+    }
+}
+
+if (!function_exists('csrf_check')) {
+    function csrf_check(?string $token = null): bool
+    {
+        $expected = $_SESSION['_csrf'] ?? '';
+        $supplied = $token ?? ($_POST['_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''));
+        return is_string($expected)
+            && is_string($supplied)
+            && $expected !== ''
+            && $supplied !== ''
+            && hash_equals($expected, $supplied);
+    }
+}
+
+if (!function_exists('csrf_validate')) {
+    function csrf_validate(): void
+    {
+        if (csrf_check()) {
+            return;
+        }
+        $app = App::getInstance();
+        if (isset($app->request) && $app->request->isAjax()) {
+            $app->response->json(['success' => false, 'message' => 'Session expired. Please refresh the page.'], 419);
+        }
+        http_response_code(419);
+        $app->session->flash('error', 'Your session has expired. Please try again.');
+        $app->response->redirect('/');
+    }
+}
+
+if (!function_exists('csrf_reset')) {
+    function csrf_reset(): void
+    {
+        unset($_SESSION['_csrf']);
     }
 }
 

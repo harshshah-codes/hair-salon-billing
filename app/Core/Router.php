@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Core;
 
-use App\Core\CSRF;
-
 /**
  * Minimal dependency-free router.
  *
@@ -46,7 +44,7 @@ class Router
 
             // Global CSRF protection for state-changing requests
             if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-                CSRF::validate();
+                csrf_validate();
             }
 
             $this->runMiddleware($route['middleware']);
