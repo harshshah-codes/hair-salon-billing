@@ -144,6 +144,7 @@ final class CustomerController extends Controller
             'recentInvoices' => $recentInvoices,
             'notes'          => $notes,
             'tab'            => $tab,
+            'scripts'        => ['js/pages/customer-show.js'],
         ]);
     }
 
@@ -239,9 +240,9 @@ final class CustomerController extends Controller
     {
         $q = trim((string)$this->request->query('q', ''));
         if ($q === '') {
-            $this->json(['results' => []]);
+            $this->json(['success' => true, 'customers' => []]);
         }
-        $this->json(['results' => $this->repo->search($q, 10)]);
+        $this->json(['success' => true, 'customers' => $this->repo->search($q, 10)]);
     }
 
     public function showJson(string $id): void

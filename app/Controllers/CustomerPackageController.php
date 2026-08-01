@@ -42,7 +42,7 @@ final class CustomerPackageController extends Controller
             $this->response->abort(404, 'Customer not found.');
         }
 
-        $type = (string)$this->request->post('package_type', 'predefined');
+        $type = (string) $this->request->post('source', (string) $this->request->post('package_type', 'predefined'));
         $data = $this->request->only(['package_id', 'name', 'price', 'credits', 'validity_days', 'notes']);
 
         $errors = $this->validate($data, [
