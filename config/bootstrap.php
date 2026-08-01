@@ -84,6 +84,11 @@ if (!empty($app->config['app']['debug'])) {
 
 set_exception_handler(function (Throwable $e): void {
     http_response_code(500);
+    App\Core\Logger::error('Uncaught ' . get_class($e), [
+        'message' => $e->getMessage(),
+        'file'    => $e->getFile() . ':' . $e->getLine(),
+        'trace'   => array_slice(explode("\n", $e->getTraceAsString()), 0, 12),
+    ]);
     if (!empty($app->config['app']['debug'])) {
         echo '<pre style="font-family:monospace;padding:20px;background:#111;color:#f87171;white-space:pre-wrap;">';
         echo htmlspecialchars((string) $e);
@@ -92,6 +97,27 @@ set_exception_handler(function (Throwable $e): void {
         echo view('errors/500', ['message' => 'Something went wrong on our side.'], 'plain');
     }
     exit;
+});
+
+set_error_handler(function (int $severity, string $message, string $file, int $line): bool {
+    App\Core\Logger::error('PHP ' . $severity, [
+        'message' => $message,
+        'file'    => $file . ':' . $line,
+    ]);
+    return false;
+});
+
+register_shutdown_function(function (): void {
+    $error = error_get_last();
+    if ($error === null) {
+        return;
+    }
+    if (in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        App\Core\Logger::error('Fatal ' . $error['type'], [
+            'message' => $error['message'],
+            'file'    => $error['file'] . ':' . $error['line'],
+        ]);
+    }
 });
 
 if (session_status() === PHP_SESSION_NONE) {
