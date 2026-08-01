@@ -9,6 +9,8 @@ namespace App\Core;
  */
 class Request
 {
+    private ?array $jsonBody = null;
+
     public function method(): string
     {
         return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
@@ -28,6 +30,43 @@ class Request
     {
         $h = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
         return strtolower($h) === 'xmlhttprequest';
+    }
+
+    public function isJson(): bool
+    {
+        $type = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+        return strpos($type, 'application/json') !== false;
+    }
+
+    public function header(string $name): ?string
+    {
+        $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+        return $_SERVER[$key] ?? null;
+    }
+
+    /**
+     * Parsed JSON request body (empty array when none / invalid).
+     */
+    public function json(): array
+    {
+        if ($this->jsonBody === null) {
+            $raw = file_get_contents('php://input');
+            $decoded = json_decode($raw ?: '', true);
+            $this->jsonBody = is_array($decoded) ? $decoded : [];
+        }
+        return $this->jsonBody;
+    }
+
+    /**
+     * All request input: JSON body merged over POST (JSON wins).
+     */
+    public function all(): array
+    {
+        $data = $_POST;
+        if ($this->isJson()) {
+            $data = array_replace($data, $this->json());
+        }
+        return $data;
     }
 
     /**
@@ -67,31 +106,35 @@ class Request
             }
             return $value;
         }
-        return $_POST[$key] ?? $default;
+        if (isset($_POST[$key])) {
+            return $_POST[$key];
+        }
+        if ($this->isJson()) {
+            $json = $this->json();
+            return $json[$key] ?? $default;
+        }
+        return $default;
     }
 
     public function post(string $key, $default = null)
     {
-        return $_POST[$key] ?? $default;
-    }
-
-    public function all(): array
-    {
-        return $_POST;
+        return $this->input($key, $default);
     }
 
     public function only(array $keys): array
     {
-        $data = [];
+        $data = $this->all();
+        $out = [];
         foreach ($keys as $key) {
-            $data[$key] = $this->input($key);
+            $out[$key] = $data[$key] ?? null;
         }
-        return $data;
+        return $out;
     }
 
     public function has(string $key): bool
     {
-        return isset($_POST[$key]);
+        $data = $this->all();
+        return isset($data[$key]);
     }
 
     public function setPostValue(string $key, $value): void
@@ -101,12 +144,12 @@ class Request
 
     public function int(string $key, int $default = 0): int
     {
-        return (int) ($_POST[$key] ?? $default);
+        return (int) ($this->input($key, $default));
     }
 
     public function float(string $key, float $default = 0.0): float
     {
-        return (float) ($_POST[$key] ?? $default);
+        return (float) ($this->input($key, $default));
     }
 
     public function file(string $key): ?array

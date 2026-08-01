@@ -46,6 +46,13 @@ class Response
     public function abort(int $status = 404, string $message = 'Not Found'): void
     {
         http_response_code($status);
+        $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+        if (str_starts_with($uri, '/api')) {
+            $this->json([
+                'success' => false,
+                'message' => $message,
+            ], $status);
+        }
         $layout = is_file(APP_PATH . '/Views/partials/error.php')
             ? APP_PATH . '/Views/partials/error.php'
             : null;

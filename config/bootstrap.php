@@ -89,6 +89,15 @@ set_exception_handler(function (Throwable $e): void {
         'file'    => $e->getFile() . ':' . $e->getLine(),
         'trace'   => array_slice(explode("\n", $e->getTraceAsString()), 0, 12),
     ]);
+    $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+    if (str_starts_with($uri, '/api')) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'message' => $app->config['app']['debug'] ? $e->getMessage() : 'Internal server error.',
+        ]);
+        exit;
+    }
     if (!empty($app->config['app']['debug'])) {
         echo '<pre style="font-family:monospace;padding:20px;background:#111;color:#f87171;white-space:pre-wrap;">';
         echo htmlspecialchars((string) $e);
@@ -140,6 +149,12 @@ $app->db = new App\Core\Database($app->database);
 $router = new App\Core\Router($app->request, $app->response);
 $routes = require BASE_PATH . '/routes/web.php';
 foreach ($routes as $route) {
+    [$method, $pattern, $handler] = $route;
+    $middleware = $route[3] ?? [];
+    $router->add($method, $pattern, $handler, $middleware);
+}
+$apiRoutes = require BASE_PATH . '/routes/api.php';
+foreach ($apiRoutes as $route) {
     [$method, $pattern, $handler] = $route;
     $middleware = $route[3] ?? [];
     $router->add($method, $pattern, $handler, $middleware);

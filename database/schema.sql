@@ -335,6 +335,22 @@ CREATE TABLE IF NOT EXISTS `settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- API Tokens (bearer token auth for the REST API)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `api_tokens` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id` INT UNSIGNED NOT NULL,
+    `token` VARCHAR(64) NOT NULL,
+    `name` VARCHAR(100) NULL,
+    `expires_at` DATETIME NULL,
+    `last_used_at` DATETIME NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_api_tokens_token` (`token`),
+    KEY `idx_api_tokens_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Activity Logs
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `activity_logs` (

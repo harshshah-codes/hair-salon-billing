@@ -42,8 +42,9 @@ class Router
                 continue;
             }
 
-            // Global CSRF protection for state-changing requests
-            if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            // Global CSRF protection for state-changing requests.
+            // API endpoints authenticate via bearer tokens instead.
+            if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true) && !str_starts_with($uri, '/api')) {
                 csrf_validate();
             }
 
