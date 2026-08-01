@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Core\BaseRepository;
+
 class CustomerNoteRepository extends BaseRepository
 {
     protected string $table = 'customer_notes';
