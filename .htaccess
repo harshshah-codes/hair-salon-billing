@@ -1,0 +1,12 @@
+# Root .htaccess: harden the app when the document root is the project
+# folder (instead of /public), and fall back into /public for requests.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block access to internal folders.
+    RewriteRule ^(app|config|database|routes|vendor|uploads)/ - [F,L]
+
+    # Redirect everything else into /public.
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

@@ -1,0 +1,22 @@
+# Front controller rewrite for the public document root.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Serve existing files / directories directly.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Route everything else through the front controller.
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Never expose the uploads directory index.
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>
+
+# Basic hardening.
+<FilesMatch "^\.(env|ht.*|gitignore)$">
+    Require all denied
+</FilesMatch>

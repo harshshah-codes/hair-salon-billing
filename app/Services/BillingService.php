@@ -1,0 +1,442 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Models\Customer;
+use App\Models\CustomerPackage;
+use App\Models\CustomerPackageTransaction;
+use App\Models\EmployeeAllocation;
+use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\LedgerEntry;
+use App\Models\Payment;
+use App\Repositories\CustomerPackageRepository;
+use App\Repositories\InvoiceRepository;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Billing engine: computes invoice figures, validates allocations,
+ * persists invoices (with items, allocations, payments, ledger and
+ * package deductions) and supports voiding with full reversal.
+ */
+final class BillingService
+{
+    public function __construct(
+        private InvoiceRepository $invoices,
+        private CustomerPackageRepository $customerPackages,
+        private Invoice $invoiceModel,
+        private InvoiceItem $itemModel,
+        private EmployeeAllocation $allocationModel,
+        private Payment $paymentModel,
+        private LedgerEntry $ledgerModel,
+        private CustomerPackage $packageModel,
+        private CustomerPackageTransaction $packageTransactionModel,
+        private Customer $customerModel,
+        private ActivityService $activity
+    ) {
+    }
+
+    /**
+     * Validate employee allocations for a single line item.
+     * Total allocation must exactly equal the line total.
+     */
+    public function validateAllocation(float $lineTotal, array $allocations): array
+    {
+        $errors = [];
+
+        if ($allocations === []) {
+            return ['valid' => true, 'errors' => []];
+        }
+
+        $sum = 0.0;
+        foreach ($allocations as $a) {
+            $amount = (float)($a['amount'] ?? 0);
+            if ($amount <= 0) {
+                $errors[] = 'Every employee allocation must be greater than zero.';
+            }
+            $sum += $amount;
+        }
+
+        $roundedSum = round($sum, 2);
+        $roundedLine = round($lineTotal, 2);
+
+        if (abs($roundedSum - $roundedLine) > 0.01) {
+            $errors[] = sprintf(
+                'Allocation total (%s) must equal the service total (%s).',
+                number_format($roundedSum, 2),
+                number_format($roundedLine, 2)
+            );
+        }
+
+        return ['valid' => $errors === [], 'errors' => $errors];
+    }
+
+    /**
+     * Build a full invoice calculation from raw payload.
+     * Shared by save() and the client-side preview endpoint.
+     */
+    public function compute(array $payload): array
+    {
+        $items = $payload['items'] ?? [];
+        $lineItems = [];
+
+        $subtotal = 0.0;
+        foreach ($items as $item) {
+            $price = (float)($item['price'] ?? 0);
+            $qty   = max(1, (int)($item['qty'] ?? 1));
+            $total = round($price * $qty, 2);
+            $subtotal += $total;
+            $lineItems[] = [
+                'service_id'    => !empty($item['service_id']) ? (int)$item['service_id'] : null,
+                'service_name'  => trim((string)($item['name'] ?? '')),
+                'price'         => $price,
+                'qty'           => $qty,
+                'total'         => $total,
+                'allocations'   => $item['allocations'] ?? [],
+            ];
+        }
+
+        $subtotal = round($subtotal, 2);
+
+        $discountType = $payload['discount_type'] ?? 'flat';
+        $discountValue = (float)($payload['discount_value'] ?? 0);
+        if ($discountType === 'percent') {
+            $discountAmount = round($subtotal * ($discountValue / 100), 2);
+        } else {
+            $discountAmount = min($discountValue, $subtotal);
+        }
+        $discountAmount = max(0, round($discountAmount, 2));
+
+        $taxable = max(0, round($subtotal - $discountAmount, 2));
+        $gstRate = (float)($payload['gst_rate'] ?? 0);
+        $gstAmount = round($taxable * ($gstRate / 100), 2);
+        $total = round($taxable + $gstAmount, 2);
+
+        // Package deduction
+        $packageDeduction = 0.0;
+        $packageId = null;
+        $packageCreditsUsed = 0;
+        $packageUsage = $payload['package_usage'] ?? [];
+        if (!is_array($packageUsage)) {
+            $packageUsage = [];
+        }
+        $requestedAmount = (float)($packageUsage['amount'] ?? $payload['package_used'] ?? 0);
+        $packageId = (int)($packageUsage['customer_package_id'] ?? 0);
+        $packageCustomerId = (int)($packageUsage['customer_id'] ?? $payload['customer_id'] ?? 0);
+
+        if ($requestedAmount > 0) {
+            if ($packageId <= 0 && $packageCustomerId > 0) {
+                $activePackages = $this->customerPackages->activeFor($packageCustomerId);
+                $packageId = $activePackages[0]['id'] ?? 0;
+            }
+
+            $row = $this->customerPackages->find($packageId);
+            if ($row && $row['status'] === 'active') {
+                $valuePerCredit = (float) $row['value_per_credit'];
+                if ($valuePerCredit <= 0 && (int) $row['credits'] > 0) {
+                    $valuePerCredit = (float) $row['selling_price'] / (int) $row['credits'];
+                }
+
+                if ($valuePerCredit > 0) {
+                    $requestedAmount = min($requestedAmount, $total);
+                    $available = (float) $row['remaining_credits'];
+                    $creditsUsed = (int) floor($requestedAmount / $valuePerCredit);
+                    $creditsUsed = min(max($creditsUsed, 0), (int) $available);
+                    if ($creditsUsed > 0) {
+                        $packageCreditsUsed = $creditsUsed;
+                        $packageDeduction = round($creditsUsed * $valuePerCredit, 2);
+                    }
+                }
+            }
+        }
+
+        $packageDeduction = min($packageDeduction, $total);
+        $amountPayable = round($total - $packageDeduction, 2);
+
+        // Payments
+        $payments = [];
+        $amountPaid = 0.0;
+        foreach ($payload['payments'] ?? [] as $p) {
+            $amount = round((float)($p['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $method = in_array($p['method'] ?? '', ['cash', 'card', 'upi', 'bank', 'other'], true) ? $p['method'] : 'cash';
+            $payments[] = [
+                'method'    => $method,
+                'amount'    => $amount,
+                'reference' => trim((string)($p['reference'] ?? '')),
+            ];
+            $amountPaid += $amount;
+        }
+        $amountPaid = min($amountPaid, $amountPayable);
+        $dueAmount = round($amountPayable - $amountPaid, 2);
+
+        $paymentStatus = match (true) {
+            $amountPayable == 0      => 'paid',
+            $dueAmount <= 0.001      => 'paid',
+            $amountPaid > 0          => 'partial',
+            default                  => 'unpaid',
+        };
+
+        return [
+            'items'            => $lineItems,
+            'subtotal'         => $subtotal,
+            'discount_type'    => $discountType,
+            'discount_value'   => $discountValue,
+            'discount_amount'  => $discountAmount,
+            'gst_rate'         => $gstRate,
+            'gst_amount'       => $gstAmount,
+            'total'            => $total,
+            'package_deduction'=> $packageDeduction,
+            'package_id'       => $packageId,
+            'package_credits'  => $packageCreditsUsed,
+            'amount_payable'   => $amountPayable,
+            'amount_paid'      => $amountPaid,
+            'due_amount'       => $dueAmount,
+            'payment_status'   => $paymentStatus,
+            'payments'         => $payments,
+        ];
+    }
+
+    /**
+     * Persist an invoice. $payload matches the billing POS form.
+     *
+     * @param array $payload
+     * @param string $mode 'final' | 'draft'
+     */
+    public function createInvoice(array $payload, string $mode = 'final'): int
+    {
+        $customerId = (int)($payload['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            throw new RuntimeException('A customer is required to create a bill.');
+        }
+
+        $calculation = $this->compute($payload);
+
+        if (empty($calculation['items'])) {
+            throw new RuntimeException('Add at least one service to the bill.');
+        }
+
+        // Allocation validation (server side)
+        foreach ($calculation['items'] as $item) {
+            $result = $this->validateAllocation($item['total'], $item['allocations']);
+            if (!$result['valid']) {
+                throw new RuntimeException(implode(' ', $result['errors']));
+            }
+        }
+
+        $invoiceNumber = $this->invoices->nextInvoiceNumber();
+
+        return \App\Core\App::getInstance()->db->transaction(function () use (
+            $payload,
+            $calculation,
+            $customerId,
+            $invoiceNumber,
+            $mode
+        ) {
+            $status = 'draft';
+            if ($mode === 'final') {
+                $status = match (true) {
+                    $calculation['due_amount'] <= 0.001 => 'paid',
+                    $calculation['amount_paid'] > 0     => 'partially_paid',
+                    default                             => 'issued',
+                };
+            }
+
+            $invoiceId = $this->invoiceModel->create([
+                'invoice_number' => $invoiceNumber,
+                'customer_id'    => $customerId,
+                'subtotal'       => $calculation['subtotal'],
+                'discount'       => $calculation['discount_amount'],
+                'gst_percent'    => $calculation['gst_rate'],
+                'gst_amount'     => $calculation['gst_amount'],
+                'total'          => $calculation['total'],
+                'package_used'   => $calculation['package_deduction'],
+                'payable'        => $calculation['amount_payable'],
+                'paid'           => $mode === 'final' ? $calculation['amount_paid'] : 0.00,
+                'balance'        => $mode === 'final' ? $calculation['due_amount'] : $calculation['amount_payable'],
+                'notes'          => $payload['notes'] ?? null,
+                'status'         => $status,
+                'invoice_date'   => date('Y-m-d'),
+                'due_date'       => null,
+                'created_by'     => auth_id(),
+            ]);
+
+            // Items + allocations
+            foreach ($calculation['items'] as $item) {
+                $itemId = $this->itemModel->create([
+                    'invoice_id'   => $invoiceId,
+                    'service_id'   => $item['service_id'],
+                    'description'  => $item['service_name'] !== '' ? $item['service_name'] : 'Custom service',
+                    'price'        => $item['price'],
+                    'qty'          => $item['qty'],
+                    'amount'       => $item['total'],
+                ]);
+
+                foreach ($item['allocations'] as $alloc) {
+                    $employeeId = (int)($alloc['employee_id'] ?? 0);
+                    $amount = (float)($alloc['amount'] ?? 0);
+                    if ($employeeId <= 0 || $amount <= 0) {
+                        continue;
+                    }
+                    $this->allocationModel->create([
+                        'invoice_id'      => $invoiceId,
+                        'invoice_item_id' => $itemId,
+                        'employee_id'     => $employeeId,
+                        'amount'          => $amount,
+                    ]);
+                }
+            }
+
+            if ($mode === 'draft') {
+                $this->activity->log('invoice.draft_created', 'invoice', $invoiceId, ['number' => $invoiceNumber]);
+                return $invoiceId;
+            }
+
+            // Payments
+            foreach ($calculation['payments'] as $payment) {
+                $this->paymentModel->create([
+                    'invoice_id'  => $invoiceId,
+                    'customer_id' => $customerId,
+                    'amount'      => $payment['amount'],
+                    'method'      => $payment['method'],
+                    'reference'   => $payment['reference'] ?: null,
+                    'received_by' => auth_id(),
+                    'paid_at'     => date('Y-m-d H:i:s'),
+                ]);
+            }
+
+            // Package deduction
+            if ($calculation['package_id'] && $calculation['package_credits'] > 0) {
+                $row = $this->customerPackages->find($calculation['package_id']);
+                if ($row) {
+                    $newRemaining = (int)$row['remaining_credits'] - $calculation['package_credits'];
+                    $this->packageModel->update((int)$row['id'], [
+                        'remaining_credits' => max(0, $newRemaining),
+                        'status'            => $newRemaining <= 0 ? 'exhausted' : $row['status'],
+                    ]);
+                    $this->packageTransactionModel->create([
+                        'customer_package_id' => (int)$row['id'],
+                        'customer_id'         => $customerId,
+                        'reference_id'        => $invoiceId,
+                        'type'                => 'debit',
+                        'credits'             => $calculation['package_credits'],
+                        'amount'              => $calculation['package_deduction'],
+                        'description'         => 'Applied to ' . $invoiceNumber,
+                    ]);
+                }
+            }
+
+            // Customer financials + ledger
+            $this->applyLedger($customerId, $invoiceId, $invoiceNumber, $calculation);
+
+            $this->activity->log('invoice.finalized', 'invoice', $invoiceId, [
+                'number'     => $invoiceNumber,
+                'payable'    => $calculation['amount_payable'],
+                'paid'       => $calculation['amount_paid'],
+                'payment_status' => $calculation['payment_status'],
+            ]);
+
+            return $invoiceId;
+        });
+    }
+
+    private function applyLedger(int $customerId, int $invoiceId, string $invoiceNumber, array $calc): void
+    {
+        // Running balance from the last ledger entry for this customer
+        $stmt = $this->ledgerModel->query()->prepare(
+            'SELECT balance FROM ledger_entries WHERE customer_id = ? ORDER BY id DESC LIMIT 1'
+        );
+        $stmt->execute([$customerId]);
+        $lastBalance = $stmt->fetchColumn();
+        $running = round((float)($lastBalance === false ? 0 : $lastBalance), 2);
+
+        // 1) Debit: bill raised
+        $running = round($running + $calc['amount_payable'], 2);
+        $this->ledgerModel->create([
+            'customer_id'  => $customerId,
+            'reference_id' => $invoiceId,
+            'type'         => 'bill',
+            'amount'       => $calc['amount_payable'],
+            'balance'      => $running,
+            'description'  => 'Invoice ' . $invoiceNumber,
+        ]);
+
+        // 2) Credits: payments received
+        foreach ($calc['payments'] as $payment) {
+            $running = round(max(0, $running - $payment['amount']), 2);
+            $this->ledgerModel->create([
+                'customer_id'  => $customerId,
+                'reference_id' => $invoiceId,
+                'type'         => 'payment',
+                'amount'       => $payment['amount'],
+                'balance'      => $running,
+                'description'  => 'Payment via ' . ucfirst($payment['method']),
+            ]);
+        }
+
+        $this->customerModel->update($customerId, [
+            'last_visit_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Void / cancel an invoice and fully reverse its financial impact.
+     */
+    public function void(int $invoiceId): void
+    {
+        \App\Core\App::getInstance()->db->transaction(function () use ($invoiceId) {
+            $invoice = $this->invoices->find($invoiceId);
+            if (!$invoice || $invoice['status'] === 'cancelled') {
+                throw new RuntimeException('Invoice not found or already cancelled.');
+            }
+
+            $number = $invoice['invoice_number'];
+            $db = \App\Core\App::getInstance()->db;
+
+            // Restore package credits
+            $transactions = $db->fetchAll(
+                'SELECT * FROM customer_package_transactions WHERE reference_id = ? AND type = ?',
+                [$invoiceId, 'debit']
+            );
+            foreach ($transactions as $txn) {
+                $pkg = $this->customerPackages->find((int)$txn['customer_package_id']);
+                if ($pkg) {
+                    $restored = (float)$pkg['remaining_credits'] + (float)$txn['credits'];
+                    $this->packageModel->update((int)$pkg['id'], [
+                        'remaining_credits' => $restored,
+                        'status'            => $restored > 0 ? 'active' : $pkg['status'],
+                    ]);
+                    $this->packageTransactionModel->create([
+                        'customer_package_id' => (int)$pkg['id'],
+                        'customer_id'         => (int)$invoice['customer_id'],
+                        'reference_id'        => null,
+                        'type'                => 'credit',
+                        'credits'             => (float)$txn['credits'],
+                        'amount'              => 0.00,
+                        'description'         => "Refund from cancelled invoice {$number}",
+                    ]);
+                }
+            }
+
+            // Remove ledger entries for this invoice
+            $db->query('DELETE FROM ledger_entries WHERE reference_id = ?', [$invoiceId]);
+
+            // Remove payments (no FK cascade on payments)
+            $db->query('DELETE FROM payments WHERE invoice_id = ?', [$invoiceId]);
+
+            // Mark invoice cancelled (items + allocations cascade via FK)
+            $this->invoiceModel->update($invoiceId, [
+                'status'  => 'cancelled',
+                'paid'    => 0.00,
+                'balance' => 0.00,
+            ]);
+
+            $this->activity->log('invoice.voided', 'invoice', $invoiceId, ['number' => $number]);
+        });
+    }
+}
