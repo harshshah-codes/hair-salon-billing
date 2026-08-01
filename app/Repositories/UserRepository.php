@@ -49,7 +49,7 @@ final class UserRepository extends BaseRepository
         return $stmt->fetch() ?: null;
     }
 
-    public function update(int $id, array $data): void
+    public function update(int $id, array $data): bool
     {
         $set  = [];
         $args = [];
@@ -60,13 +60,14 @@ final class UserRepository extends BaseRepository
             }
         }
         if ($set === []) {
-            return;
+            return true;
         }
         $args[] = $id;
         $stmt = $this->db->prepare(
             'UPDATE users SET ' . implode(', ', $set) . ", updated_at = NOW() WHERE id = ?"
         );
         $stmt->execute($args);
+        return $stmt->rowCount() > 0;
     }
 
     public function roles(): array
