@@ -42,6 +42,46 @@ class Database
                 $this->fail($e);
             }
         }
+
+        if ($autoCreate) {
+            $this->installIfEmpty();
+        }
+    }
+
+    /**
+     * Fresh-database bootstrap: if the schema is empty, apply schema.sql +
+     * seed.sql and create a usable admin account so the app just works.
+     */
+    private function installIfEmpty(): void
+    {
+        $tables = (int) $this->pdo->query(
+            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()'
+        )->fetchColumn();
+
+        if ($tables > 0) {
+            return;
+        }
+
+        foreach (['schema.sql', 'seed.sql'] as $file) {
+            $path = BASE_PATH . '/database/' . $file;
+            $sql  = file_get_contents($path);
+            if ($sql === false) {
+                throw new \RuntimeException("Could not read database file: {$path}");
+            }
+            $this->pdo->exec($sql);
+        }
+
+        $role = $this->pdo->query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")->fetch();
+        if ($role) {
+            $email    = getenv('DB_ADMIN_EMAIL') ?: 'admin@salon.local';
+            $password = getenv('DB_ADMIN_PASSWORD') ?: 'admin123';
+            $stmt = $this->pdo->prepare(
+                "INSERT INTO users (role_id, name, email, password, phone, status)
+                 VALUES (?, 'Administrator', ?, ?, '9000000000', 'active')
+                 ON DUPLICATE KEY UPDATE role_id = VALUES(role_id), password = VALUES(password)"
+            );
+            $stmt->execute([(int) $role['id'], $email, password_hash($password, PASSWORD_DEFAULT)]);
+        }
     }
 
     /**
