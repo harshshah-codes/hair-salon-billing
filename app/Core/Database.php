@@ -17,25 +17,66 @@ class Database
 
     public function __construct(array $config)
     {
+        $autoCreate = (bool) ($config['auto_create'] ?? true);
+
+        try {
+            $this->pdo = $this->connect($config, true);
+        } catch (PDOException $e) {
+            // Auto-create the database when the server is up but the
+            // database does not exist yet (MySQL error 1049 / 1044).
+            if (!$autoCreate || ($e->getCode() !== '1049' && $e->getCode() !== '1044')) {
+                $this->fail($e);
+            }
+
+            try {
+                $admin = $this->connect($config, false);
+                $admin->exec(sprintf(
+                    'CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET %s COLLATE %s_unicode_ci',
+                    $this->quoteIdentifier($config['database']),
+                    $config['charset'],
+                    $config['charset']
+                ));
+                $admin = null;
+                $this->pdo = $this->connect($config, true);
+            } catch (PDOException $e) {
+                $this->fail($e);
+            }
+        }
+    }
+
+    /**
+     * Build a PDO connection, optionally selecting the target database.
+     */
+    private function connect(array $config, bool $withDatabase): PDO
+    {
         $dsn = sprintf(
-            '%s:host=%s;port=%s;dbname=%s;charset=%s',
+            '%s:host=%s;port=%s;charset=%s%s',
             $config['driver'],
             $config['host'],
             $config['port'],
-            $config['database'],
-            $config['charset']
+            $config['charset'],
+            $withDatabase ? ';dbname=' . $config['database'] : ''
         );
 
-        try {
-            $this->pdo = new PDO($dsn, $config['username'], $config['password'], $config['options']);
-        } catch (PDOException $e) {
-            if (App::config('app.debug', false)) {
-                throw $e;
-            }
-            http_response_code(500);
-            echo '<h1>Database connection failed</h1><p>Please check config/database.php and ensure MySQL is running.</p>';
-            exit(1);
+        return new PDO($dsn, $config['username'], $config['password'], $config['options']);
+    }
+
+    /**
+     * Sanitize an identifier for use inside backticks.
+     */
+    private function quoteIdentifier(string $identifier): string
+    {
+        return str_replace('`', '``', $identifier);
+    }
+
+    private function fail(PDOException $e): never
+    {
+        if (App::config('app.debug', false)) {
+            throw $e;
         }
+        http_response_code(500);
+        echo '<h1>Database connection failed</h1><p>Please check config/database.php and ensure MySQL is running.</p>';
+        exit(1);
     }
 
     public function pdo(): PDO
