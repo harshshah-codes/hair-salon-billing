@@ -520,6 +520,29 @@ html[data-theme="dark"] .badge.bg-secondary-soft { background: #1a2440 !importan
 }
 .filter-bar .form-select, .filter-bar .form-control { min-width: 150px; }
 
+.filter-chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.filter-chip {
+    padding: 6px 14px;
+    font-size: .78rem;
+    font-weight: 600;
+    border-radius: 999px;
+    border: 1px solid var(--nh-border);
+    background: var(--nh-surface);
+    color: var(--nh-muted);
+    cursor: pointer;
+    transition: all .15s;
+}
+.filter-chip:hover { border-color: var(--nh-primary); color: var(--nh-text); }
+.filter-chip.active { background: var(--nh-primary); border-color: var(--nh-primary); color: #fff; }
+
+.theme-option {
+    flex: 0 0 auto;
+    border: 1px solid var(--nh-border);
+    background: var(--nh-surface);
+    color: var(--nh-text);
+}
+.theme-option.active, .theme-option:focus { border-color: var(--nh-primary); box-shadow: 0 0 0 .2rem var(--nh-primary-glow); }
+
 /* ---------- Auth ---------- */
 .auth-body {
     min-height: 100vh;
@@ -563,6 +586,8 @@ html[data-theme="dark"] .badge.bg-secondary-soft { background: #1a2440 !importan
 }
 .billing-items-table select.form-select-sm { min-height: 32px; }
 
+.billing-items-table .input-group { flex-wrap: nowrap; }
+.billing-items-table .input-group .input-group-text { padding-inline: 8px; }
 .billing-items-table .qty-input { width: 62px; }
 .billing-items-table .price-input { width: 104px; }
 .billing-items-table .alloc-btn { white-space: nowrap; }
