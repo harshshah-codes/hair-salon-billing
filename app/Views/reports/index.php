@@ -273,12 +273,30 @@ $isRevenue = $current === 'revenue';
                     <tr><td colspan="5" class="text-center text-muted py-4">Select a customer to view their statement</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $row): ?>
+                        <?php
+                            $amount = (float) $row['amount'];
+                            $bal = (float) $row['wallet_balance'];
+                            $isCredit = !empty($row['is_credit']);
+                            $desc = $row['package_name'] ?? ($row['invoice_number'] ?? '');
+                            if ($row['type'] === 'debit') {
+                                $desc = ($row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? ''));
+                                if (!empty($row['employees'])) {
+                                    $desc .= ' — by ' . $row['employees'];
+                                }
+                            } elseif (!empty($row['services'])) {
+                                $desc = trim($row['services']) . ' — ' . $desc;
+                            }
+                        ?>
                         <tr>
                             <td class="text-muted text-nowrap"><?= e(format_datetime($row['created_at'])) ?></td>
                             <td><span class="badge bg-secondary-soft"><?= e($row['type']) ?></span></td>
-                            <td><?= e($row['description']) ?></td>
-                            <td class="text-end fw-semibold"><?= e(money($row['amount'])) ?></td>
-                            <td class="text-end text-muted"><?= e(money($row['balance_after'])) ?></td>
+                            <td><?= e($desc) ?></td>
+                            <td class="text-end <?= $isCredit ? 'text-success' : 'text-danger' ?> fw-semibold">
+                                <?= $isCredit ? '+' : '−' ?><?= e(money(abs($amount))) ?>
+                            </td>
+                            <td class="text-end <?= $bal < 0 ? 'text-danger' : ($bal > 0 ? 'text-success' : 'text-muted') ?> fw-semibold">
+                                <?= $bal < 0 ? '−' : ($bal > 0 ? '+' : '') ?><?= e(money(abs($bal))) ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

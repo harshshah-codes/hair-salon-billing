@@ -44,7 +44,7 @@ $hasErrors = $flash->hasErrors();
         <main class="app-content">
             <div class="container-fluid px-3 px-lg-4 py-3 py-lg-4">
                 <?php if ($hasErrors): ?>
-                    <?php $errors = $flash->errors(); ?>
+                    <?php $errors = $flash->errorsAll(); ?>
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <strong>Please fix the following:</strong>
                         <ul class="mb-0 mt-1 small">
@@ -81,5 +81,7 @@ $hasErrors = $flash->hasErrors();
 <?php foreach ((array) $scripts as $s): ?>
     <script src="<?php echo url($s); ?>"></script>
 <?php endforeach; ?>
+
+<?php App\Core\Session::sweep(); ?>
 </body>
 </html>

@@ -113,14 +113,25 @@ final class ReportController extends Controller
                 }
                 break;
             case 'statements':
-                $rows = [['Date', 'Type', 'Description', 'Amount', 'Balance']];
+                $rows = [['Date', 'Type', 'Description', 'Services', 'By', 'Amount', 'Balance']];
                 foreach ($data['rows'] as $row) {
+                    $balance = (float) ($row['wallet_balance'] ?? 0);
+                    $amount  = (float) $row['amount'];
+                    $isCredit = !empty($row['is_credit']);
+                    $desc = $row['package_name'] ?? ($row['invoice_number'] ?? '');
+                    if ($row['type'] === 'debit') {
+                        $desc = ($row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? ''));
+                    } elseif (!empty($row['services'])) {
+                        $desc = trim($row['services']) . ' — ' . $desc;
+                    }
                     $rows[] = [
                         $row['created_at'],
                         $row['type'],
-                        $row['description'],
-                        $row['amount'],
-                        $row['balance_after'],
+                        $desc,
+                        $row['services'] ?? '',
+                        $row['employees'] ?? '',
+                        ($isCredit ? '+' : '-') . number_format(abs($amount), 2),
+                        ($balance > 0 ? '+' : ($balance < 0 ? '-' : '')) . number_format(abs($balance), 2),
                     ];
                 }
                 break;

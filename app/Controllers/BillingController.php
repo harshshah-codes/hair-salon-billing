@@ -84,7 +84,6 @@ class BillingController extends Controller
     public function store(): void
     {
         $draft = (bool) $this->request->input('draft', false);
-        $allowOverrun = (bool) $this->request->input('allow_overrun', false);
 
         // Normalize nested items arrays
         $items = [];
@@ -121,7 +120,8 @@ class BillingController extends Controller
             'customer_id' => (int) $this->request->input('customer_id'),
             'items' => $items,
             'package_used' => (float) $this->request->input('package_used', 0),
-            'allow_overrun' => $allowOverrun,
+            'top_up' => (float) $this->request->input('top_up', 0),
+            'top_up_name' => (string) $this->request->input('top_up_name', 'Wallet Top-up'),
             'payments' => [],
             'notes' => (string) $this->request->input('notes'),
         ];
@@ -150,37 +150,9 @@ class BillingController extends Controller
                 'customer_id' => (int) $payload['customer_id'],
             ];
 
-            if ($allowOverrun && !$draft) {
-                $negative = $this->walletBalance((int) $payload['customer_id']);
-                if ($negative < 0) {
-                    $response['negative_balance'] = $negative;
-                }
-            }
-
             $this->json($response);
         } catch (RuntimeException $e) {
             $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
-    }
-
-    private function walletBalance(int $customerId): float
-    {
-        $packages = $this->db->fetchAll(
-            "SELECT cp.`remaining_credits`, cp.`credits`, cp.`selling_price`, cp.`value_per_credit`
-             FROM customer_packages cp
-             WHERE cp.`customer_id` = ? AND cp.`deleted_at` IS NULL
-               AND (cp.`expires_on` IS NULL OR cp.`expires_on` >= CURDATE())",
-            [$customerId]
-        );
-
-        $balance = 0.0;
-        foreach ($packages as $pkg) {
-            $vpc = (float) ($pkg['value_per_credit'] ?? 0);
-            if ($vpc <= 0 && (float) ($pkg['credits'] ?? 0) > 0) {
-                $vpc = (float) ($pkg['selling_price'] ?? 0) / (float) $pkg['credits'];
-            }
-            $balance += (float) ($pkg['remaining_credits'] ?? 0) * $vpc;
-        }
-        return round($balance, 2);
     }
 }

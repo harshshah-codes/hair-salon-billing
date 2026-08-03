@@ -143,7 +143,8 @@ final class CustomerRepository extends BaseRepository
     public function recentServices(int $customerId, int $limit = 8): array
     {
         $stmt = $this->db->prepare(
-            "SELECT ii.description AS service_name, ii.price, ii.qty, i.invoice_number, i.created_at
+            "SELECT ii.description AS service_name, ii.price, ii.qty,
+                    (ii.price * ii.qty) AS amount, i.invoice_number, i.created_at
              FROM invoice_items ii
              JOIN invoices i ON i.id = ii.invoice_id
              WHERE i.customer_id = ? AND i.status IN ('issued','paid','partially_paid')

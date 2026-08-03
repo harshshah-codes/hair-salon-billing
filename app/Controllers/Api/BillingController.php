@@ -168,13 +168,12 @@ final class BillingController extends ApiController
         $json = $this->request->isJson() ? $this->request->json() : [];
 
         if (isset($json['items']) && is_array($json['items'])) {
-            // Structured payload — pass through; compute() reads package_usage/package_used
-            // and allow_overrun. Default allow_overrun to false.
+            // Structured payload — pass through; compute() reads package_usage/package_used.
             $payload = $json;
             if (!isset($payload['package_usage']) && isset($payload['package_used'])) {
                 $payload['package_usage'] = ['amount' => $payload['package_used']];
             }
-            $payload['allow_overrun'] = (bool)($payload['allow_overrun'] ?? $payload['mark_received'] ?? false);
+            $payload['top_up'] = (float)($payload['top_up'] ?? 0);
             return $payload;
         }
 
@@ -213,7 +212,7 @@ final class BillingController extends ApiController
             'customer_id' => (int) $this->request->input('customer_id'),
             'items' => $items,
             'package_used' => (float) $this->request->input('package_used', 0),
-            'allow_overrun' => (bool) $this->request->input('allow_overrun', false),
+            'top_up' => (float) $this->request->input('top_up', 0),
             'payments' => [],
             'notes' => (string) $this->request->input('notes'),
         ];

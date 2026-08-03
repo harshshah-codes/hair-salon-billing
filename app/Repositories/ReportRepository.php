@@ -184,15 +184,36 @@ final class ReportRepository extends BaseRepository
     public function customerStatement(int $customerId, string $from, string $to): array
     {
         $stmt = $this->db->prepare(
-            "SELECT l.*, i.invoice_number, p.method AS payment_method
-             FROM ledger_entries l
-             LEFT JOIN invoices i ON i.id = l.reference_id
-             LEFT JOIN payments p ON p.id = l.reference_id
-             WHERE l.customer_id = ? AND DATE(l.created_at) BETWEEN ? AND ?
-             ORDER BY l.created_at ASC"
+            "SELECT cpt.id, cpt.created_at, cpt.type, cpt.amount, cpt.reference_id,
+                    cp.name AS package_name, i.invoice_number,
+                    (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR ', ')
+                     FROM invoice_items ii
+                     WHERE ii.invoice_id = cpt.reference_id) AS services,
+                    (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
+                     FROM employee_allocations ea
+                     JOIN employees e ON e.id = ea.employee_id
+                     WHERE ea.invoice_id = cpt.reference_id) AS employees
+             FROM customer_package_transactions cpt
+             LEFT JOIN customer_packages cp ON cp.id = cpt.customer_package_id
+             LEFT JOIN invoices i ON i.id = cpt.reference_id
+             WHERE cpt.customer_id = ? AND DATE(cpt.created_at) BETWEEN ? AND ?
+             ORDER BY cpt.id ASC"
         );
         $stmt->execute([$customerId, $from, $to]);
-        return $stmt->fetchAll();
+
+        $rows = $stmt->fetchAll();
+        $running = 0.0;
+        foreach ($rows as &$row) {
+            // Credit-ish types add money to the wallet; debits take it out.
+            $isCredit = in_array($row['type'], ['purchase', 'credit'], true);
+            $amount = round((float) $row['amount'], 2);
+            $row['is_credit'] = $isCredit;
+            $running = round($isCredit ? $running + $amount : $running - $amount, 2);
+            $row['wallet_balance'] = $running;
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /* ---------------------------------------------------------

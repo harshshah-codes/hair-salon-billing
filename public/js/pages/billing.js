@@ -61,6 +61,7 @@
     }
 
     $(document).on('click', '#btnCreateCustomerFromSearch', function () {
+        $results.addClass('d-none').html('');
         openCreateCustomerModal();
     });
 
@@ -261,15 +262,16 @@
     });
 
     /* ---------- Submit ---------- */
-    function buildPayload(overrun, draft) {
+    function buildPayload(flags) {
+        flags = flags || {};
         const data = {
             _token: $('meta[name="csrf-token"]').attr('content'),
             customer_id: state.customer ? state.customer.id : '',
             package_used: state.customer ? calc() : 0,
-            allow_overrun: overrun ? 1 : 0,
             notes: state.notes,
-            draft: draft ? 1 : 0
+            draft: flags.draft ? 1 : 0
         };
+        if (flags.top_up) { data.top_up = flags.top_up; }
         state.items.forEach((item, idx) => {
             data['items_name[' + idx + ']'] = item.name;
             data['items_price[' + idx + ']'] = item.price;
@@ -303,29 +305,37 @@
         const balance = walletBalance();
 
         if (!draft && total > balance) {
-            showExceedModal(total, balance);
+            showTopUpModal(total, balance);
             return;
         }
 
-        createTransaction(false, draft);
+        createTransaction(draft);
     }
 
-    function showExceedModal(total, balance) {
+    function showTopUpModal(total, balance) {
+        const shortfall = total - balance;
         $('#exceedTotal').text(money(total));
         $('#exceedBalance').text(money(balance));
-        $('#exceedShortfall').text(money(total - balance));
+        $('#exceedShortfall').text(money(shortfall));
+        $('#topUpAmount').val(shortfall.toFixed(2));
         $('#exceedModal').modal('show');
     }
 
-    $('#btnMarkReceived').on('click', function () {
+    $('#btnTopUpAndCreate').on('click', function () {
+        const val = parseFloat($('#topUpAmount').val()) || 0;
+        const shortfall = (calc() - walletBalance());
+        if (val < 0.01 || val < shortfall - 0.01) {
+            Swal.fire({ icon: 'warning', title: 'Top-up too small', text: 'The top-up must cover the shortfall of ' + money(shortfall) + '.' });
+            return;
+        }
         $('#exceedModal').modal('hide');
-        createTransaction(true, false);
+        createTransaction(false, val);
     });
 
-    function createTransaction(overrun, draft) {
+    function createTransaction(draft, topUp) {
         Swal.fire({
             title: draft ? 'Save as draft?' : 'Create transaction?',
-            text: overrun ? 'This will charge the full amount to the wallet, leaving a negative balance.' : 'The wallet will be charged for this transaction.',
+            text: topUp ? 'A lifetime wallet top-up of ' + money(topUp) + ' will be added and applied to this transaction.' : 'The wallet will be charged for this transaction.',
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: draft ? 'Save Draft' : 'Create Transaction',
@@ -340,18 +350,14 @@
             $.ajax({
                 url: '/billing/store',
                 method: 'POST',
-                data: buildPayload(overrun, draft),
+                data: buildPayload(overrunFlag(draft, topUp)),
                 dataType: 'json'
             }).done((res) => {
                 if (res.success) {
-                    if (overrun) {
-                        showNullifyModal(res.negative_balance, res.customer_id);
-                    } else {
-                        Swal.fire({ icon: 'success', title: res.message, timer: 1800, showConfirmButton: false })
-                            .then(() => {
-                                window.location.href = '/billing/invoice/' + res.invoice_id;
-                            });
-                    }
+                    Swal.fire({ icon: 'success', title: res.message, timer: 1800, showConfirmButton: false })
+                        .then(() => {
+                            window.location.href = '/billing/invoice/' + res.invoice_id;
+                        });
                 } else {
                     Swal.fire({ icon: 'error', title: res.message });
                     $(btn).prop('disabled', false);
@@ -364,10 +370,10 @@
         });
     }
 
-    function showNullifyModal(negative, customerId) {
-        $('#nullifyAmount').text(money(Math.abs(negative || 0)));
-        $('#btnNullifyPackage').attr('href', '/customers/' + customerId + '?tab=packages');
-        $('#nullifyModal').modal('show');
+    function overrunFlag(draft, topUp) {
+        const data = { draft: draft };
+        if (topUp) { data.top_up = topUp; }
+        return data;
     }
 
     $('#btnGenerateInvoice').on('click', () => submitBill(false));
@@ -383,7 +389,7 @@
 
     /* ---------- Create customer from search ---------- */
     function openCreateCustomerModal() {
-        $('#createCustomerForm input').removeClass('is-invalid').val('');
+        $('#createCustomerForm input:not([type=hidden])').removeClass('is-invalid').val('');
         $('#createCustomerModal .invalid-feedback').addClass('d-none').html('');
         $('#createCustomerModal').modal('show');
         setTimeout(() => $('#ccName').focus(), 300);

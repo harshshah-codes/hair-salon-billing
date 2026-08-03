@@ -143,44 +143,28 @@
 <div class="modal fade" id="exceedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title text-danger"><i class="fa-solid fa-circle-exclamation me-2"></i>Amount Exceeds Balance</h5>
+                <h5 class="modal-title text-warning"><i class="fa-solid fa-wallet me-2"></i>Add Wallet Top-up</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="mb-2">The transaction total of <strong id="exceedTotal">₹0.00</strong> exceeds the customer's wallet balance of <strong id="exceedBalance">₹0.00</strong>.</p>
-                <p class="text-muted small mb-0">Collect the shortfall of <strong id="exceedShortfall" class="text-danger">₹0.00</strong> outside the software, then mark this transaction as received.</p>
+                <p class="mb-2">This transaction totals <strong id="exceedTotal">₹0.00</strong> but the wallet balance is <strong id="exceedBalance">₹0.00</strong>.</p>
+                <p class="text-success fw-semibold mb-3">Add a one-time, lifetime top-up of <strong id="exceedShortfall">₹0.00</strong> to cover it.</p>
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text">₹</span>
+                    <input type="number" class="form-control" id="topUpAmount" step="0.01" min="0">
+                </div>
+                <div class="form-text mt-2">The top-up is added to the wallet and applied to this transaction immediately. No expiry.</div>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Go Back</button>
-                <button type="button" class="btn btn-primary" id="btnMarkReceived">
-                    <i class="fa-solid fa-check me-1"></i>Mark as Received
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btnTopUpAndCreate">
+                    <i class="fa-solid fa-check me-1"></i>Add Top-up &amp; Create
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Nullify modal -->
-<div class="modal fade" id="nullifyModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title text-warning"><i class="fa-solid fa-scale-balanced me-2"></i>Negative Balance</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="mb-2">Transaction created. The wallet balance is now <strong id="nullifyAmount" class="text-danger">₹0.00</strong>.</p>
-                <p class="text-muted small mb-0">Attach a custom package of the same balance to nullify the negative. This records the amount collected outside.</p>
-            </div>
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Later</button>
-                <a href="#" class="btn btn-primary" id="btnNullifyPackage">
-                    <i class="fa-solid fa-box-open me-1"></i>Attach Custom Package
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Create customer modal -->
 <div class="modal fade" id="createCustomerModal" tabindex="-1" aria-hidden="true">

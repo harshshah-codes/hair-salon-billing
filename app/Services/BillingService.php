@@ -104,83 +104,144 @@ final class BillingService
         // No GST / discount — plain total from wallet balance only.
         $total = $subtotal;
 
-        // Package (wallet) deduction. Overrun allowed: this lets the wallet
-        // balance go negative when the bill exceeds what the customer holds.
-        $packageDeduction = 0.0;
-        $packageId = null;
-        $packageCreditsUsed = 0;
-        $allowedOverrun = (bool)($payload['allow_overrun'] ?? $payload['mark_received'] ?? false);
         $packageUsage = $payload['package_usage'] ?? [];
         if (!is_array($packageUsage)) {
             $packageUsage = [];
         }
         $requestedAmount = (float)($packageUsage['amount'] ?? $payload['package_used'] ?? 0);
-        $packageId = (int)($packageUsage['customer_package_id'] ?? 0);
         $packageCustomerId = (int)($packageUsage['customer_id'] ?? $payload['customer_id'] ?? 0);
 
-        if ($requestedAmount > 0) {
-            if ($packageId <= 0 && $packageCustomerId > 0) {
-                $activePackages = $this->customerPackages->activeFor($packageCustomerId);
-                $packageId = $activePackages[0]['id'] ?? 0;
+        // Wallet (package) balance available, oldest package consumed first.
+        $active = $packageCustomerId > 0 ? $this->customerPackages->activeFor($packageCustomerId) : [];
+        $availableBalance = 0.0;
+        foreach ($active as $row) {
+            $vpc = (float) $row['value_per_credit'];
+            if ($vpc <= 0 && (int) $row['credits'] > 0) {
+                $vpc = (float) $row['selling_price'] / (int) $row['credits'];
             }
+            $availableBalance += (float) $row['remaining_credits'] * $vpc;
+        }
+        $availableBalance = round($availableBalance, 2);
 
-            $row = $this->customerPackages->find($packageId);
-            if ($row && $row['status'] === 'active') {
-                $valuePerCredit = (float) $row['value_per_credit'];
-                if ($valuePerCredit <= 0 && (int) $row['credits'] > 0) {
-                    $valuePerCredit = (float) $row['selling_price'] / (int) $row['credits'];
+        // Deduct from active packages (oldest first) up to the bill total.
+        // No overrun: the deduction never exceeds the available balance, so
+        // the wallet never goes negative. A shortfall must be covered by a
+        // top-up package before the bill is accepted.
+        $packageDeduction = 0.0;
+        $packageId = null;
+        $packageCreditsUsed = 0;
+        $deductions = [];
+        $toUse = min($requestedAmount, $total);
+        if ($toUse > 0) {
+            $remaining = $toUse;
+            foreach (array_reverse($active) as $row) {
+                if ($remaining <= 0.001) {
+                    break;
                 }
-
-                if ($valuePerCredit > 0) {
-                    $requestedAmount = min($requestedAmount, $total);
-                    $creditsUsed = (int) ceil($requestedAmount / $valuePerCredit);
-                    $creditsUsed = max(0, $creditsUsed);
-                    if (!$allowedOverrun) {
-                        $available = (float) $row['remaining_credits'];
-                        $creditsUsed = min($creditsUsed, (int) $available);
-                    }
-                    if ($creditsUsed > 0) {
-                        $packageCreditsUsed = $creditsUsed;
-                        $packageDeduction = round($creditsUsed * $valuePerCredit, 2);
-                    }
+                $vpc = (float) $row['value_per_credit'];
+                if ($vpc <= 0 && (int) $row['credits'] > 0) {
+                    $vpc = (float) $row['selling_price'] / (int) $row['credits'];
                 }
+                if ($vpc <= 0) {
+                    continue;
+                }
+                $available = round((float) $row['remaining_credits'] * $vpc, 2);
+                if ($available <= 0.001) {
+                    continue;
+                }
+                $take = min($remaining, $available);
+                $creditsUsed = (int) ceil($take / $vpc);
+                $creditsUsed = min($creditsUsed, (int) $row['remaining_credits']);
+                if ($creditsUsed <= 0) {
+                    continue;
+                }
+                $deduct = round($creditsUsed * $vpc, 2);
+                if ($deduct > $remaining) {
+                    $deduct = round($remaining, 2);
+                }
+                $deductions[] = [
+                    'package_id' => (int) $row['id'],
+                    'credits'    => $creditsUsed,
+                    'amount'     => $deduct,
+                ];
+                $packageDeduction += $deduct;
+                $packageCreditsUsed += $creditsUsed;
+                $remaining = round($remaining - $deduct, 2);
             }
+            $packageId = $deductions[0]['package_id'] ?? null;
         }
 
-        $packageDeduction = min($packageDeduction, $total);
+        $packageDeduction = round(min($packageDeduction, $total), 2);
         $amountPayable = round($total - $packageDeduction, 2);
 
         // Wallet-only bill: no cash/card/upi payment component.
         $payments = [];
         $amountPaid = 0.0;
-        $amountPaid = min($amountPaid, $amountPayable);
-        $dueAmount = round($amountPayable - $amountPaid, 2);
+        $dueAmount = round($amountPayable, 2);
 
-        $paymentStatus = match (true) {
-            $amountPayable == 0 => 'paid',
-            $dueAmount <= 0.001 => 'paid',
-            default             => 'unpaid',
-        };
+        $paymentStatus = $dueAmount <= 0.001 ? 'paid' : 'unpaid';
 
         return [
-            'items'            => $lineItems,
-            'subtotal'         => $subtotal,
-            'discount_type'    => 'flat',
-            'discount_value'   => 0.0,
-            'discount_amount'  => 0.0,
-            'gst_rate'         => 0.0,
-            'gst_amount'       => 0.0,
-            'total'            => $total,
-            'package_deduction'=> $packageDeduction,
-            'package_id'       => $packageId,
-            'package_credits'  => $packageCreditsUsed,
-            'amount_payable'   => $amountPayable,
-            'amount_paid'      => $amountPaid,
-            'due_amount'       => $dueAmount,
-            'payment_status'   => $paymentStatus,
-            'payments'         => $payments,
-            'allowed_overrun'  => $allowedOverrun,
+            'items'             => $lineItems,
+            'subtotal'          => $subtotal,
+            'discount_type'     => 'flat',
+            'discount_value'    => 0.0,
+            'discount_amount'   => 0.0,
+            'gst_rate'          => 0.0,
+            'gst_amount'        => 0.0,
+            'total'             => $total,
+            'package_deduction' => $packageDeduction,
+            'package_id'        => $packageId,
+            'package_credits'   => $packageCreditsUsed,
+            'package_deductions'=> $deductions,
+            'amount_payable'    => $amountPayable,
+            'amount_paid'       => $amountPaid,
+            'due_amount'        => $dueAmount,
+            'payment_status'    => $paymentStatus,
+            'payments'          => $payments,
+            'available_balance' => $availableBalance,
+            'shortfall'         => round(max(0, $total - $availableBalance), 2),
         ];
+    }
+
+    /**
+     * Create a lifetime wallet top-up package for a customer.
+     * Credits map 1:1 to rupees (value_per_credit = 1.00), so the balance
+     * value equals the amount paid. No expiry.
+     */
+    public function createTopUpPackage(int $customerId, float $amount, string $name = 'Wallet Top-up'): int
+    {
+        $credits = max(1, (int) round($amount));
+        $id = (int) $this->packageModel->create([
+            'customer_id'        => $customerId,
+            'package_id'         => null,
+            'name'               => $name,
+            'selling_price'      => $amount,
+            'credits'            => $credits,
+            'remaining_credits'  => $credits,
+            'value_per_credit'   => 1.00,
+            'validity_days'      => null,
+            'starts_on'          => date('Y-m-d'),
+            'expires_on'         => null,
+            'status'             => 'active',
+            'notes'              => 'Wallet top-up (lifetime)',
+        ]);
+
+        $this->packageTransactionModel->create([
+            'customer_package_id' => $id,
+            'customer_id'         => $customerId,
+            'type'                => 'purchase',
+            'credits'             => $credits,
+            'amount'              => $amount,
+            'description'         => $name,
+        ]);
+
+        $this->activity->log('package.topup', 'customer_package', $id, [
+            'customer_id' => $customerId,
+            'amount'      => $amount,
+        ]);
+
+        return $id;
     }
 
     /**
@@ -196,10 +257,26 @@ final class BillingService
             throw new RuntimeException('A customer is required to create a bill.');
         }
 
+        // Allow the POS to attach a wallet top-up in the same request so the
+        // bill never has to be blocked. The top-up is a lifetime custom package.
+        $topUp = (float)($payload['top_up'] ?? 0);
+        if ($topUp > 0) {
+            $this->createTopUpPackage($customerId, $topUp, (string)($payload['top_up_name'] ?? 'Wallet Top-up'));
+        }
+
         $calculation = $this->compute($payload);
 
         if (empty($calculation['items'])) {
             throw new RuntimeException('Add at least one service to the bill.');
+        }
+
+        // No negative balances: the wallet must cover the full bill. The POS
+        // attaches a top-up package to satisfy this before submitting.
+        if ($mode === 'final' && $calculation['due_amount'] > 0.001) {
+            throw new RuntimeException(sprintf(
+                'Insufficient wallet balance. Add a top-up of ₹%s to continue.',
+                number_format($calculation['shortfall'], 2)
+            ));
         }
 
         // Allocation validation (server side)
@@ -291,33 +368,30 @@ final class BillingService
                 ]);
             }
 
-            // Package deduction
-            if ($calculation['package_id'] && $calculation['package_credits'] > 0) {
-                $row = $this->customerPackages->find($calculation['package_id']);
-                if ($row) {
-                    $newRemaining = (float)$row['remaining_credits'] - $calculation['package_credits'];
-                    $status = $row['status'];
-                    if ($status === 'active') {
-                        // Exactly zero -> exhausted. Negative (overrun) stays active
-                        // so the wallet shows a negative balance for nullification.
-                        $status = $newRemaining == 0 ? 'exhausted' : 'active';
-                    }
-                    $this->packageModel->update((int)$row['id'], [
-                        // Allow overrun -> negative balance which is nullified
-                        // later by attaching a matching custom package.
-                        'remaining_credits' => $newRemaining,
-                        'status'            => $status,
-                    ]);
-                    $this->packageTransactionModel->create([
-                        'customer_package_id' => (int)$row['id'],
-                        'customer_id'         => $customerId,
-                        'reference_id'        => $invoiceId,
-                        'type'                => 'debit',
-                        'credits'             => $calculation['package_credits'],
-                        'amount'              => $calculation['package_deduction'],
-                        'description'         => 'Applied to ' . $invoiceNumber,
-                    ]);
+            // Package deduction (wallet only — no negative balances allowed)
+            foreach ($calculation['package_deductions'] as $deduct) {
+                $row = $this->customerPackages->find((int)$deduct['package_id']);
+                if (!$row) {
+                    continue;
                 }
+                $newRemaining = round((float)$row['remaining_credits'] - (float)$deduct['credits'], 2);
+                $status = $row['status'];
+                if ($status === 'active' && $newRemaining <= 0.001) {
+                    $status = 'exhausted';
+                }
+                $this->packageModel->update((int)$row['id'], [
+                    'remaining_credits' => $newRemaining,
+                    'status'            => $status,
+                ]);
+                $this->packageTransactionModel->create([
+                    'customer_package_id' => (int)$row['id'],
+                    'customer_id'         => $customerId,
+                    'reference_id'        => $invoiceId,
+                    'type'                => 'debit',
+                    'credits'             => (float)$deduct['credits'],
+                    'amount'              => (float)$deduct['amount'],
+                    'description'         => 'Applied to ' . $invoiceNumber,
+                ]);
             }
 
             // Customer financials + ledger

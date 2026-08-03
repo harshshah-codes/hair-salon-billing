@@ -131,12 +131,26 @@ $typeLabels = [
             <tr><td colspan="5" style="text-align:center;color:#888">Select a customer to view their statement</td></tr>
         <?php else: ?>
             <?php foreach ($rows as $row): ?>
+                <?php
+                    $amount = (float) $row['amount'];
+                    $bal = (float) $row['wallet_balance'];
+                    $isCredit = !empty($row['is_credit']);
+                    $desc = $row['package_name'] ?? ($row['invoice_number'] ?? '');
+                    if ($row['type'] === 'debit') {
+                        $desc = ($row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? ''));
+                        if (!empty($row['employees'])) {
+                            $desc .= ' — by ' . $row['employees'];
+                        }
+                    } elseif (!empty($row['services'])) {
+                        $desc = trim($row['services']) . ' — ' . $desc;
+                    }
+                ?>
                 <tr>
                     <td><?= e(format_datetime($row['created_at'])) ?></td>
                     <td><?= e($row['type']) ?></td>
-                    <td><?= e($row['description'] ?? '—') ?></td>
-                    <td class="num"><?= e(money($row['amount'])) ?></td>
-                    <td class="num"><?= e(money($row['balance_after'])) ?></td>
+                    <td><?= e($desc) ?></td>
+                    <td class="num"><?= $isCredit ? '+' : '−' ?><?= e(money(abs($amount))) ?></td>
+                    <td class="num"><?= $bal < 0 ? '−' : ($bal > 0 ? '+' : '') ?><?= e(money(abs($bal))) ?></td>
                 </tr>
             <?php endforeach; ?>
         <?php endif; ?>

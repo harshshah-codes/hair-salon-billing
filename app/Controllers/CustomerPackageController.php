@@ -43,7 +43,11 @@ final class CustomerPackageController extends Controller
         }
 
         $type = (string) $this->request->post('source', (string) $this->request->post('package_type', 'predefined'));
-        $data = $this->request->only(['package_id', 'name', 'price', 'credits', 'validity_days', 'notes']);
+        $data = $this->request->only(['package_id', 'name', 'price', 'selling_price', 'credits', 'validity_days', 'notes']);
+        if (isset($data['selling_price']) && $data['selling_price'] !== '' && $data['selling_price'] !== null) {
+            $data['price'] = $data['selling_price'];
+        }
+        unset($data['selling_price']);
 
         $errors = $this->validate($data, [
             'package_id'    => 'nullable|integer|exists:packages,id',
