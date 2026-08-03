@@ -257,6 +257,20 @@ html[data-theme="dark"] .theme-toggle .fa-moon { display: none !important; }
 .card-body { padding: 20px; }
 .card-footer { background: transparent; border-top: 1px solid var(--nh-border); }
 
+.quick-link {
+    display: block; text-decoration: none; color: inherit;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    border: 1px solid var(--nh-border); height: 100%;
+}
+.quick-link:hover { transform: translateY(-3px); box-shadow: var(--nh-shadow); border-color: var(--nh-primary); color: inherit; }
+.quick-link .stat-icon {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto; border-radius: 12px;
+    font-size: 1.05rem;
+}
+.quick-link .card-body { padding: 20px 12px; }
+
 .stat-card { position: relative; overflow: hidden; }
 .stat-card .stat-icon {
     width: 44px; height: 44px;
