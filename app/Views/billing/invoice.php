@@ -62,7 +62,7 @@ $status = $invoice['status'] ?? 'issued';
         <div class="muted"><?= e(setting('business_phone', '')) ?> <?= setting('business_email', '') ? '· ' . e(setting('business_email', '')) : '' ?></div>
     </div>
     <div class="inv-meta">
-        <h2>INVOICE</h2>
+        <h2>TRANSACTION</h2>
         <div><?= e($invoice['invoice_number']) ?></div>
         <div>Date: <?= e(format_date($invoice['invoice_date'])) ?></div>
         <div class="mt-1"><span class="badge <?= e($status) ?>"><?= e($statusLabels[$status] ?? $status) ?></span></div>
@@ -107,7 +107,7 @@ $status = $invoice['status'] ?? 'issued';
         <div class="row"><span>GST (<?= e(rtrim(rtrim((string)$invoice['gst_percent'], '0'), '.')) ?>%)</span><span><?= e(money($invoice['gst_amount'])) ?></span></div>
     <?php endif; ?>
     <?php if ((float)$invoice['package_used'] > 0): ?>
-        <div class="row"><span>Package Credits</span><span>-<?= e(money($invoice['package_used'])) ?></span></div>
+        <div class="row"><span>Wallet Charged</span><span>-<?= e(money($invoice['package_used'])) ?></span></div>
     <?php endif; ?>
     <div class="row total"><span>Total Payable</span><span><?= e(money($invoice['payable'])) ?></span></div>
     <div class="row"><span>Paid</span><span><?= e(money($invoice['paid'])) ?></span></div>
@@ -128,17 +128,16 @@ $status = $invoice['status'] ?? 'issued';
 <?php else: ?>
 <div class="page-header">
     <div>
-        <h1>Invoice <?= e($invoice['invoice_number']) ?></h1>
+        <h1>Transaction <?= e($invoice['invoice_number']) ?></h1>
         <p><?= e(format_date($invoice['invoice_date'])) ?> · <span class="status-pill status-<?= e($status) ?>"><?= e($statusLabels[$status] ?? $status) ?></span></p>
     </div>
     <div class="page-actions">
         <a href="<?= e(url('/billing/invoice/' . (int)$invoice['id'] . '/print')) ?>" class="btn btn-light" target="_blank"><i class="fa-solid fa-print me-1"></i>Print</a>
         <a href="<?= e(url('/billing/invoice/' . (int)$invoice['id'] . '/pdf')) ?>" class="btn btn-light"><i class="fa-solid fa-file-pdf me-1"></i>PDF</a>
         <?php if (in_array($status, ['issued', 'partially_paid'], true)): ?>
-            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#payModal"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Record Payment</button>
-            <form method="post" action="<?= e(url('/invoices/' . (int)$invoice['id'] . '/cancel')) ?>" class="d-inline" data-confirm data-confirm-message="Cancel this invoice? Package credits used will be refunded.">
+            <form method="post" action="<?= e(url('/invoices/' . (int)$invoice['id'] . '/cancel')) ?>" class="d-inline" data-confirm data-confirm-message="Cancel this transaction? Wallet credits used will be refunded.">
                 <?= csrf_field() ?>
-                <button type="submit" class="btn btn-outline-danger"><i class="fa-solid fa-ban me-1"></i>Cancel Invoice</button>
+                <button type="submit" class="btn btn-outline-danger"><i class="fa-solid fa-ban me-1"></i>Cancel Transaction</button>
             </form>
         <?php endif; ?>
     </div>
@@ -155,11 +154,9 @@ $status = $invoice['status'] ?? 'issued';
                 <?php if (!empty($invoice['customer_address'])): ?><div class="text-muted"><?= e($invoice['customer_address']) ?></div><?php endif; ?>
             </div>
             <div class="col-md-6 text-md-end">
-                <h6 class="text-muted small text-uppercase mb-2">Invoice Summary</h6>
-                <div class="mb-1">Subtotal: <strong><?= e(money($invoice['subtotal'])) ?></strong></div>
-                <?php if ((float)$invoice['discount'] > 0): ?><div class="mb-1">Discount: <strong>-<?= e(money($invoice['discount'])) ?></strong></div><?php endif; ?>
-                <?php if ((float)$invoice['gst_amount'] > 0): ?><div class="mb-1">GST: <strong><?= e(money($invoice['gst_amount'])) ?></strong></div><?php endif; ?>
-                <?php if ((float)$invoice['package_used'] > 0): ?><div class="mb-1">Package Credits: <strong>-<?= e(money($invoice['package_used'])) ?></strong></div><?php endif; ?>
+                <h6 class="text-muted small text-uppercase mb-2">Transaction Summary</h6>
+                <div class="mb-1">Total: <strong><?= e(money($invoice['total'])) ?></strong></div>
+                <?php if ((float)$invoice['package_used'] > 0): ?><div class="mb-1">Wallet Charged: <strong>-<?= e(money($invoice['package_used'])) ?></strong></div><?php endif; ?>
                 <hr>
                 <div class="fs-5 fw-bold">Payable: <?= e(money($invoice['payable'])) ?></div>
                 <div>Paid: <span class="text-success"><?= e(money($invoice['paid'])) ?></span></div>
@@ -221,18 +218,15 @@ $status = $invoice['status'] ?? 'issued';
 <?php endif; ?>
 
 <div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header">
         <h5 class="mb-0">Payments</h5>
-        <?php if (in_array($status, ['issued', 'partially_paid'], true)): ?>
-            <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal"><i class="fa-solid fa-plus me-1"></i>Add</button>
-        <?php endif; ?>
     </div>
     <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
             <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>By</th><th class="text-end">Amount</th></tr></thead>
             <tbody>
             <?php if (empty($payments)): ?>
-                <tr><td colspan="5" class="text-center text-muted py-4">No payments recorded</td></tr>
+                <tr><td colspan="5" class="text-center text-muted py-4">No payments recorded — paid from wallet</td></tr>
             <?php else: ?>
                 <?php foreach ($payments as $p): ?>
                     <tr>
@@ -252,43 +246,4 @@ $status = $invoice['status'] ?? 'issued';
 <?php if (!empty($invoice['notes'])): ?>
     <div class="alert alert-light border"><strong>Notes:</strong> <?= nl2br(e($invoice['notes'])) ?></div>
 <?php endif; ?>
-
-<div class="modal fade" id="payModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="post" action="<?= e(url('/invoices/' . (int)$invoice['id'] . '/pay')) ?>">
-                <?= csrf_field() ?>
-                <div class="modal-header">
-                    <h5 class="modal-title">Record Payment — <?= e($invoice['invoice_number']) ?></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="small text-muted mb-3">Balance due: <strong><?= e(money($invoice['balance'])) ?></strong></p>
-                    <div class="mb-3">
-                        <label class="form-label">Amount</label>
-                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" max="<?= e($invoice['balance']) ?>" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Method</label>
-                        <select name="method" class="form-select">
-                            <option value="cash">Cash</option>
-                            <option value="card">Card</option>
-                            <option value="upi">UPI</option>
-                            <option value="bank">Bank Transfer</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Reference <span class="text-muted small">(optional)</span></label>
-                        <input type="text" name="reference" class="form-control">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Save Payment</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 <?php endif; ?>

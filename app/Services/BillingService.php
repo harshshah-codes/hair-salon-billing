@@ -101,24 +101,15 @@ final class BillingService
 
         $subtotal = round($subtotal, 2);
 
-        $discountType = $payload['discount_type'] ?? 'flat';
-        $discountValue = (float)($payload['discount_value'] ?? 0);
-        if ($discountType === 'percent') {
-            $discountAmount = round($subtotal * ($discountValue / 100), 2);
-        } else {
-            $discountAmount = min($discountValue, $subtotal);
-        }
-        $discountAmount = max(0, round($discountAmount, 2));
+        // No GST / discount — plain total from wallet balance only.
+        $total = $subtotal;
 
-        $taxable = max(0, round($subtotal - $discountAmount, 2));
-        $gstRate = (float)($payload['gst_rate'] ?? 0);
-        $gstAmount = round($taxable * ($gstRate / 100), 2);
-        $total = round($taxable + $gstAmount, 2);
-
-        // Package deduction
+        // Package (wallet) deduction. Overrun allowed: this lets the wallet
+        // balance go negative when the bill exceeds what the customer holds.
         $packageDeduction = 0.0;
         $packageId = null;
         $packageCreditsUsed = 0;
+        $allowedOverrun = (bool)($payload['allow_overrun'] ?? $payload['mark_received'] ?? false);
         $packageUsage = $payload['package_usage'] ?? [];
         if (!is_array($packageUsage)) {
             $packageUsage = [];
@@ -142,9 +133,12 @@ final class BillingService
 
                 if ($valuePerCredit > 0) {
                     $requestedAmount = min($requestedAmount, $total);
-                    $available = (float) $row['remaining_credits'];
-                    $creditsUsed = (int) floor($requestedAmount / $valuePerCredit);
-                    $creditsUsed = min(max($creditsUsed, 0), (int) $available);
+                    $creditsUsed = (int) ceil($requestedAmount / $valuePerCredit);
+                    $creditsUsed = max(0, $creditsUsed);
+                    if (!$allowedOverrun) {
+                        $available = (float) $row['remaining_credits'];
+                        $creditsUsed = min($creditsUsed, (int) $available);
+                    }
                     if ($creditsUsed > 0) {
                         $packageCreditsUsed = $creditsUsed;
                         $packageDeduction = round($creditsUsed * $valuePerCredit, 2);
@@ -156,40 +150,26 @@ final class BillingService
         $packageDeduction = min($packageDeduction, $total);
         $amountPayable = round($total - $packageDeduction, 2);
 
-        // Payments
+        // Wallet-only bill: no cash/card/upi payment component.
         $payments = [];
         $amountPaid = 0.0;
-        foreach ($payload['payments'] ?? [] as $p) {
-            $amount = round((float)($p['amount'] ?? 0), 2);
-            if ($amount <= 0) {
-                continue;
-            }
-            $method = in_array($p['method'] ?? '', ['cash', 'card', 'upi', 'bank', 'other'], true) ? $p['method'] : 'cash';
-            $payments[] = [
-                'method'    => $method,
-                'amount'    => $amount,
-                'reference' => trim((string)($p['reference'] ?? '')),
-            ];
-            $amountPaid += $amount;
-        }
         $amountPaid = min($amountPaid, $amountPayable);
         $dueAmount = round($amountPayable - $amountPaid, 2);
 
         $paymentStatus = match (true) {
-            $amountPayable == 0      => 'paid',
-            $dueAmount <= 0.001      => 'paid',
-            $amountPaid > 0          => 'partial',
-            default                  => 'unpaid',
+            $amountPayable == 0 => 'paid',
+            $dueAmount <= 0.001 => 'paid',
+            default             => 'unpaid',
         };
 
         return [
             'items'            => $lineItems,
             'subtotal'         => $subtotal,
-            'discount_type'    => $discountType,
-            'discount_value'   => $discountValue,
-            'discount_amount'  => $discountAmount,
-            'gst_rate'         => $gstRate,
-            'gst_amount'       => $gstAmount,
+            'discount_type'    => 'flat',
+            'discount_value'   => 0.0,
+            'discount_amount'  => 0.0,
+            'gst_rate'         => 0.0,
+            'gst_amount'       => 0.0,
             'total'            => $total,
             'package_deduction'=> $packageDeduction,
             'package_id'       => $packageId,
@@ -199,6 +179,7 @@ final class BillingService
             'due_amount'       => $dueAmount,
             'payment_status'   => $paymentStatus,
             'payments'         => $payments,
+            'allowed_overrun'  => $allowedOverrun,
         ];
     }
 
@@ -314,10 +295,18 @@ final class BillingService
             if ($calculation['package_id'] && $calculation['package_credits'] > 0) {
                 $row = $this->customerPackages->find($calculation['package_id']);
                 if ($row) {
-                    $newRemaining = (int)$row['remaining_credits'] - $calculation['package_credits'];
+                    $newRemaining = (float)$row['remaining_credits'] - $calculation['package_credits'];
+                    $status = $row['status'];
+                    if ($status === 'active') {
+                        // Exactly zero -> exhausted. Negative (overrun) stays active
+                        // so the wallet shows a negative balance for nullification.
+                        $status = $newRemaining == 0 ? 'exhausted' : 'active';
+                    }
                     $this->packageModel->update((int)$row['id'], [
-                        'remaining_credits' => max(0, $newRemaining),
-                        'status'            => $newRemaining <= 0 ? 'exhausted' : $row['status'],
+                        // Allow overrun -> negative balance which is nullified
+                        // later by attaching a matching custom package.
+                        'remaining_credits' => $newRemaining,
+                        'status'            => $status,
                     ]);
                     $this->packageTransactionModel->create([
                         'customer_package_id' => (int)$row['id'],
@@ -355,27 +344,31 @@ final class BillingService
         $lastBalance = $stmt->fetchColumn();
         $running = round((float)($lastBalance === false ? 0 : $lastBalance), 2);
 
-        // 1) Debit: bill raised
-        $running = round($running + $calc['amount_payable'], 2);
+        // 1) Debit: bill raised (full total)
+        $running = round($running + $calc['total'], 2);
         $this->ledgerModel->create([
             'customer_id'  => $customerId,
             'reference_id' => $invoiceId,
             'type'         => 'bill',
-            'amount'       => $calc['amount_payable'],
+            'amount'       => $calc['total'],
             'balance'      => $running,
-            'description'  => 'Invoice ' . $invoiceNumber,
+            'description'  => 'Transaction ' . $invoiceNumber,
         ]);
 
-        // 2) Credits: payments received
+        // 2) Credit: wallet usage + any recorded payments
+        $credits = round((float) $calc['package_deduction'], 2);
         foreach ($calc['payments'] as $payment) {
-            $running = round(max(0, $running - $payment['amount']), 2);
+            $credits += round((float) $payment['amount'], 2);
+        }
+        if ($credits > 0) {
+            $running = round($running - $credits, 2);
             $this->ledgerModel->create([
                 'customer_id'  => $customerId,
                 'reference_id' => $invoiceId,
                 'type'         => 'payment',
-                'amount'       => $payment['amount'],
+                'amount'       => $credits,
                 'balance'      => $running,
-                'description'  => 'Payment via ' . ucfirst($payment['method']),
+                'description'  => 'Paid from wallet',
             ]);
         }
 

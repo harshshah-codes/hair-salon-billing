@@ -90,6 +90,25 @@ final class CustomerController extends Controller
         unset($data['phone']);
 
         $id = $this->service->create($data);
+
+        if ($this->request->isAjax()) {
+            $customer = $this->repo->find((int)$id);
+            $this->json([
+                'success' => true,
+                'message' => 'Customer created successfully.',
+                'customer' => $customer ? [
+                    'id' => (int)$customer['id'],
+                    'name' => $customer['name'],
+                    'mobile' => $customer['mobile'],
+                    'email' => $customer['email'],
+                    'photo' => $customer['photo'],
+                    'outstanding' => 0,
+                    'credits' => 0.0,
+                    'last_visit' => $customer['last_visit_at'],
+                ] : null,
+            ]);
+        }
+
         $this->flash('success', 'Customer created successfully.');
         $this->redirect('/customers/' . $id);
     }

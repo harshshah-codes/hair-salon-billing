@@ -9,11 +9,8 @@
     const state = {
         customer: null,
         items: [],
-        payments: [],
-        discount: 0,
-        gstPercent: parseFloat($('#tGstPercent').val() || 18),
-        usePackage: false,
-        packageUsed: 0
+        notes: '',
+        lastPayload: null
     };
 
     let uidCounter = 0;
@@ -41,11 +38,10 @@
     }
 
     function renderCustomerResults(list) {
-        if (!list.length) {
-            $results.html('<div class="list-group-item text-muted small py-3 text-center">No customers found. Create one from the Customers page.</div>').removeClass('d-none');
-            return;
-        }
         let html = '';
+        if (!list.length) {
+            html = '<div class="list-group-item text-muted small py-3 text-center border-0">No customers found.</div>';
+        }
         list.forEach((c) => {
             const bal = parseFloat(c.available_balance) || 0;
             const out = parseFloat(c.outstanding) || 0;
@@ -57,8 +53,16 @@
                 + '<span class="' + (out > 0 ? 'text-danger' : 'text-muted') + '">Outstanding ' + money(out) + '</span></span>'
                 + '</button>';
         });
+        html += '<button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3 border-0 border-top text-primary fw-semibold" id="btnCreateCustomerFromSearch">'
+            + '<span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-soft text-primary" style="width:36px;height:36px"><i class="fa-solid fa-plus"></i></span>'
+            + '<span>Create new customer</span>'
+            + '</button>';
         $results.html('<div class="list-group list-group-flush">' + html + '</div>').removeClass('d-none');
     }
+
+    $(document).on('click', '#btnCreateCustomerFromSearch', function () {
+        openCreateCustomerModal();
+    });
 
     $(document).on('click', '#customerResults .list-group-item', function () {
         const c = $(this).data('customer');
@@ -85,22 +89,11 @@
             + '</div>';
         $('#customerCard').html(html).removeClass('d-none');
 
-        // package availability
         if (c.credits > 0) {
-            $('#pkgAvailable').text(money(c.credits));
-            $('#pkgName').text('Credits available');
-            $('#tUsePackage').prop('disabled', false);
-            $('#tUsePackage').prop('checked', true);
-            $('#pkgRow').show();
-            state.usePackage = true;
+            $('#pkgAvailable').text(money(c.credits)).removeClass('text-danger').addClass('text-success');
         } else {
-            $('#pkgAvailable').text('₹0.00');
-            $('#pkgName').text('—');
-            $('#tUsePackage').prop('disabled', true).prop('checked', false);
-            $('#pkgRow').hide();
-            state.usePackage = false;
+            $('#pkgAvailable').text(money(c.credits)).removeClass('text-success').addClass('text-danger');
         }
-        $('#tOutstanding').text(money(c.outstanding));
         recalc();
     }
 
@@ -108,11 +101,7 @@
         state.customer = null;
         $input.val('').focus();
         $('#customerCard').addClass('d-none').html('');
-        $('#pkgAvailable').text('₹0.00');
-        $('#pkgName').text('—');
-        $('#tUsePackage').prop('disabled', true).prop('checked', false);
-        $('#pkgRow').hide();
-        state.usePackage = false;
+        $('#pkgAvailable').text('₹0.00').removeClass('text-success').addClass('text-danger');
         recalc();
     });
 
@@ -123,15 +112,7 @@
         }
     });
 
-    /* ---------- Service rows ---------- */
-    function renderServiceOptions(selected) {
-        let opts = '<option value="">Choose service…</option>';
-        BILLING.services.forEach((s) => {
-            opts += '<option value="' + s.id + '" data-name="' + s.name + '" data-price="' + s.price + '"' + (selected == s.id ? ' selected' : '') + '>' + s.name + ' — ₹' + s.price.toFixed(2) + '</option>';
-        });
-        return opts;
-    }
-
+    /* ---------- Service rows (custom name + price) ---------- */
     function renderEmpOptions(selected) {
         let opts = '';
         BILLING.employees.forEach((e) => {
@@ -140,14 +121,14 @@
         return opts;
     }
 
-    function addItemRow(serviceId) {
+    function addItemRow() {
         if (!$('#billingItemsBody tr:first').hasClass('bill-item-row')) {
             $('#billingItemsBody').html('');
         }
         const uid = nextUid();
         const tr = $('<tr>', { class: 'bill-item-row', 'data-uid': uid })
-            .append($('<td>').append($('<select>', { class: 'form-select form-select-sm service-select' }).html(renderServiceOptions(serviceId))))
-            .append($('<td>').append($('<div>', { class: 'input-group input-group-sm' }).append($('<span>', { class: 'input-group-text' }).text('₹')).append($('<input>', { class: 'form-control text-end price-input', type: 'number', step: '0.01', min: '0', value: '0' }))))
+            .append($('<td>').append($('<input>', { class: 'form-control form-control-sm name-input', type: 'text', placeholder: 'Service name (e.g. Haircut)' })))
+            .append($('<td>').append($('<div>', { class: 'input-group input-group-sm' }).append($('<span>', { class: 'input-group-text' }).text('₹')).append($('<input>', { class: 'form-control text-end price-input', type: 'number', step: '0.01', min: '0', value: '' }))))
             .append($('<td>').append($('<input>', { class: 'form-control form-control-sm text-center qty-input', type: 'number', min: '1', value: '1' })))
             .append($('<td>').append(
                 $('<select>', { class: 'form-select form-select-sm emp-select', multiple: true }).html(renderEmpOptions()),
@@ -157,41 +138,16 @@
 
         $('#billingItemsBody').append(tr);
 
-        tr.find('.service-select').select2({ dropdownParent: tr, width: '100%', placeholder: 'Choose service…' });
         tr.find('.emp-select').select2({ dropdownParent: tr, width: '100%', placeholder: 'Assign employees…', closeOnSelect: false });
 
-        state.items.push({ uid: uid, service_id: serviceId || 0, name: '', price: 0, qty: 1, employees: [] });
-
-        if (serviceId) {
-            const svc = BILLING.services.find((s) => s.id === serviceId);
-            if (svc) {
-                setRowService(uid, svc);
-            }
-        }
+        state.items.push({ uid: uid, name: '', price: 0, qty: 1, employees: [] });
         recalc();
     }
 
-    function setRowService(uid, svc) {
-        const item = state.items.find((i) => i.uid === uid);
-        if (!item) return;
-        item.service_id = svc.id;
-        item.name = svc.name;
-        item.price = svc.price;
-        const tr = $('tr[data-uid="' + uid + '"]');
-        tr.find('.price-input').val(svc.price.toFixed(2));
-    }
-
-    $(document).on('change', '.service-select', function () {
+    $(document).on('input', '.name-input', function () {
         const tr = $(this).closest('tr');
-        const uid = tr.data('uid');
-        const id = parseInt($(this).val(), 10);
-        const svc = BILLING.services.find((s) => s.id === id);
-        if (svc) setRowService(uid, svc);
-        else {
-            const item = state.items.find((i) => i.uid === uid);
-            if (item) { item.service_id = 0; item.name = ''; item.price = 0; }
-        }
-        recalc();
+        const item = state.items.find((i) => i.uid === tr.data('uid'));
+        if (item) { item.name = $(this).val().trim(); }
     });
 
     $(document).on('input change', '.price-input', function () {
@@ -224,7 +180,7 @@
         recalc();
     });
 
-    $('#btnAddServiceRow').on('click', () => addItemRow(0));
+    $('#btnAddServiceRow').on('click', () => addItemRow());
 
     /* ---------- Allocation ---------- */
     let allocUid = null;
@@ -280,120 +236,41 @@
         recalc();
     });
 
-    /* ---------- Payments ---------- */
-    function addPaymentRow(method, amount, reference) {
-        const row = $('<div>', { class: 'payment-row d-flex gap-1 align-items-center mb-2' })
-            .append($('<select>', { class: 'form-select form-select-sm pay-method', style: 'width:100px' })
-                .append('<option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option>').val(method || 'cash'))
-            .append($('<input>', { class: 'form-control form-control-sm pay-amount text-end', type: 'number', step: '0.01', min: '0', value: (amount || ''), placeholder: 'Amount' }))
-            .append($('<input>', { class: 'form-control form-control-sm pay-reference d-none', type: 'text', value: (reference || ''), placeholder: 'Ref / UTR' }))
-            .append($('<button>', { type: 'button', class: 'btn btn-sm btn-icon text-danger remove-payment' }).append($('<i>', { class: 'fa-solid fa-xmark' })));
-
-        $('#paymentRows').append(row);
-        row.find('.pay-method').on('change', function () {
-            $(this).closest('.payment-row').find('.pay-reference').toggleClass('d-none', ['cash'].includes($(this).val()));
-        });
-        updateReceived();
-    }
-
-    $(document).on('input', '.pay-amount', updateReceived);
-    $(document).on('click', '.remove-payment', function () {
-        $(this).closest('.payment-row').remove();
-        updateReceived();
-    });
-    $('#btnAddPayment').on('click', () => addPaymentRow('cash', '', ''));
-
-    function collectPayments() {
-        const list = [];
-        $('.payment-row').each(function () {
-            const method = $(this).find('.pay-method').val();
-            const amount = parseFloat($(this).find('.pay-amount').val()) || 0;
-            const reference = $(this).find('.pay-reference').val() || '';
-            if (amount > 0) list.push({ method: method, amount: amount, reference: reference });
-        });
-        return list;
-    }
-
-    function updateReceived() {
-        const payable = calc();
-        let received = 0;
-        $('.pay-amount').each(function () {
-            received += parseFloat($(this).val()) || 0;
-        });
-        const overpaid = received > payable && payable > 0;
-        $('#tReceived').text(money(overpaid ? payable : received));
-        $('#tDue').text(money(Math.max(0, payable - received)));
-        $('#payError').toggleClass('d-none', !overpaid);
-        if (overpaid) {
-            $('#payErrorMsg').text('Payments exceed the balance of ' + money(payable) + '. Amount is limited to the payable balance.');
-        }
-        return { payable, received, overpaid };
-    }
-
     /* ---------- Totals ---------- */
+    function walletBalance() {
+        return state.customer ? parseFloat(state.customer.credits) || 0 : 0;
+    }
+
     function calc() {
-        const subtotal = state.items.reduce((s, i) => s + i.price * i.qty, 0);
-        state.discount = Math.min(parseFloat($('#tDiscount').val()) || 0, subtotal);
-        state.gstPercent = parseFloat($('#tGstPercent').val()) || 0;
-        const gstAmount = (subtotal - state.discount) * state.gstPercent / 100;
-        const total = subtotal - state.discount + gstAmount;
-
-        let available = state.customer ? parseFloat(state.customer.credits) || 0 : 0;
-        if (state.usePackage && available > 0) {
-            let used = Math.min(total, available);
-            if (used !== state.packageUsed) {
-                state.packageUsed = used;
-                $('#tPackageUsed').val(used.toFixed(2));
-            }
-            $('#tBalanceAfter').text(money(available - used));
-        } else {
-            state.packageUsed = 0;
-            $('#tPackageUsed').val('0');
-            $('#tBalanceAfter').text(money(available));
-        }
-
-        $('#tSubtotal').text(money(subtotal));
-        $('#tGstAmount').text(money(gstAmount));
+        const total = state.items.reduce((s, i) => s + i.price * i.qty, 0);
+        const balance = walletBalance();
         $('#tTotal').text(money(total));
-        $('#tPayable').text(money(total - state.packageUsed));
-
-        if (available > 0) $('#pkgAvailable').text(money(available));
-        return total - state.packageUsed;
+        $('#tPayable').text(money(total));
+        $('#tBalanceAfter').text(money(balance - total))
+            .toggleClass('text-danger', (balance - total) < 0)
+            .toggleClass('text-success', (balance - total) >= 0);
+        return total;
     }
 
     function recalc() {
         calc();
-        updateReceived();
     }
 
-    $('#tDiscount').on('input', recalc);
-    $('#tGstPercent').on('input', recalc);
-    $('#tPackageUsed').on('input', recalc);
-    $('#tUsePackage').on('change', function () {
-        state.usePackage = $(this).is(':checked');
-        $('#pkgRow').toggle(state.usePackage);
-        if (state.usePackage && state.customer) {
-            const available = parseFloat(state.customer.credits) || 0;
-            const total = parseFloat($('#tTotal').text().replace('₹', '').replace(/,/g, '')) || 0;
-            $('#tPackageUsed').val(Math.min(total, available).toFixed(2));
-        }
-        recalc();
+    $('#billNotes').on('input', function () {
+        state.notes = $(this).val() || '';
     });
 
     /* ---------- Submit ---------- */
-    function buildPayload(draft) {
+    function buildPayload(overrun, draft) {
         const data = {
             _token: $('meta[name="csrf-token"]').attr('content'),
             customer_id: state.customer ? state.customer.id : '',
-            discount: state.discount,
-            gst_percent: state.gstPercent,
-            use_package: state.usePackage ? 1 : 0,
-            package_used: state.usePackage ? state.packageUsed : 0,
-            notes: $('#billNotes').val() || '',
+            package_used: state.customer ? calc() : 0,
+            allow_overrun: overrun ? 1 : 0,
+            notes: state.notes,
             draft: draft ? 1 : 0
         };
         state.items.forEach((item, idx) => {
-            data['items_service[' + idx + ']'] = item.service_id;
             data['items_name[' + idx + ']'] = item.name;
             data['items_price[' + idx + ']'] = item.price;
             data['items_qty[' + idx + ']'] = item.qty;
@@ -401,12 +278,6 @@
                 data['alloc_employee[' + idx + '][' + j + ']'] = emp.id;
                 data['alloc_amount[' + idx + '][' + j + ']'] = emp.amount;
             });
-        });
-        const payments = collectPayments();
-        payments.forEach((p, idx) => {
-            data['pay_method[' + idx + ']'] = p.method;
-            data['pay_amount[' + idx + ']'] = p.amount;
-            data['pay_reference[' + idx + ']'] = p.reference;
         });
         return data;
     }
@@ -416,32 +287,48 @@
             Swal.fire({ icon: 'warning', title: 'No customer selected', text: 'Search and select a customer first.' });
             return;
         }
-        const validItems = state.items.filter((i) => i.service_id && i.price > 0);
+        const validItems = state.items.filter((i) => i.name && i.price > 0);
         if (!validItems.length) {
-            Swal.fire({ icon: 'warning', title: 'No services', text: 'Add at least one service to the bill.' });
+            Swal.fire({ icon: 'warning', title: 'No services', text: 'Add at least one service with a name and price.' });
             return;
         }
         for (const item of state.items) {
-            const allocSum = item.employees.reduce((s, e) => s + e.amount, 0);
-            if (item.employees.length && Math.abs(allocSum - item.price * item.qty) > 0.009) {
+            if (item.name && item.price > 0 && item.employees.length && Math.abs(item.employees.reduce((s, e) => s + e.amount, 0) - item.price * item.qty) > 0.009) {
                 Swal.fire({ icon: 'warning', title: 'Allocation incomplete', text: 'Complete employee allocation for "' + item.name + '".' });
                 return;
             }
         }
 
-        const payable = calc();
-        const received = collectPayments().reduce((s, p) => s + p.amount, 0);
-        if (received > payable) {
-            Swal.fire({ icon: 'error', title: 'Payments exceed balance', text: 'Payments of ' + money(received) + ' exceed the balance of ' + money(payable) + '.' });
+        const total = calc();
+        const balance = walletBalance();
+
+        if (!draft && total > balance) {
+            showExceedModal(total, balance);
             return;
         }
 
+        createTransaction(false, draft);
+    }
+
+    function showExceedModal(total, balance) {
+        $('#exceedTotal').text(money(total));
+        $('#exceedBalance').text(money(balance));
+        $('#exceedShortfall').text(money(total - balance));
+        $('#exceedModal').modal('show');
+    }
+
+    $('#btnMarkReceived').on('click', function () {
+        $('#exceedModal').modal('hide');
+        createTransaction(true, false);
+    });
+
+    function createTransaction(overrun, draft) {
         Swal.fire({
-            title: draft ? 'Save as draft?' : 'Generate invoice?',
-            text: draft ? 'This bill will be saved as a draft.' : 'The invoice will be generated and payments recorded.',
+            title: draft ? 'Save as draft?' : 'Create transaction?',
+            text: overrun ? 'This will charge the full amount to the wallet, leaving a negative balance.' : 'The wallet will be charged for this transaction.',
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: draft ? 'Save Draft' : 'Generate Invoice',
+            confirmButtonText: draft ? 'Save Draft' : 'Create Transaction',
             confirmButtonColor: '#10b981',
             cancelButtonText: 'Cancel',
             reverseButtons: true
@@ -453,14 +340,18 @@
             $.ajax({
                 url: '/billing/store',
                 method: 'POST',
-                data: buildPayload(draft),
+                data: buildPayload(overrun, draft),
                 dataType: 'json'
             }).done((res) => {
                 if (res.success) {
-                    Swal.fire({ icon: 'success', title: res.message, timer: 1800, showConfirmButton: false })
-                        .then(() => {
-                            window.location.href = '/billing/invoice/' + res.invoice_id;
-                        });
+                    if (overrun) {
+                        showNullifyModal(res.negative_balance, res.customer_id);
+                    } else {
+                        Swal.fire({ icon: 'success', title: res.message, timer: 1800, showConfirmButton: false })
+                            .then(() => {
+                                window.location.href = '/billing/invoice/' + res.invoice_id;
+                            });
+                    }
                 } else {
                     Swal.fire({ icon: 'error', title: res.message });
                     $(btn).prop('disabled', false);
@@ -473,20 +364,89 @@
         });
     }
 
+    function showNullifyModal(negative, customerId) {
+        $('#nullifyAmount').text(money(Math.abs(negative || 0)));
+        $('#btnNullifyPackage').attr('href', '/customers/' + customerId + '?tab=packages');
+        $('#nullifyModal').modal('show');
+    }
+
     $('#btnGenerateInvoice').on('click', () => submitBill(false));
     $('#btnSaveDraft').on('click', () => submitBill(true));
     $('#btnCancelBill').on('click', () => {
         Swal.fire({
-            title: 'Cancel bill?', icon: 'warning', showCancelButton: true,
-            confirmButtonText: 'Clear Bill', confirmButtonColor: '#dc2626', cancelButtonText: 'Keep Editing'
+            title: 'Cancel transaction?', icon: 'warning', showCancelButton: true,
+            confirmButtonText: 'Clear', confirmButtonColor: '#dc2626', cancelButtonText: 'Keep Editing'
         }).then((r) => {
             if (r.isConfirmed) window.location.reload();
         });
     });
 
+    /* ---------- Create customer from search ---------- */
+    function openCreateCustomerModal() {
+        $('#createCustomerForm input').removeClass('is-invalid').val('');
+        $('#createCustomerModal .invalid-feedback').addClass('d-none').html('');
+        $('#createCustomerModal').modal('show');
+        setTimeout(() => $('#ccName').focus(), 300);
+    }
+
+    $('#btnCreateCustomer').on('click', function () {
+        const form = $('#createCustomerForm')[0];
+        if (!form.name.value.trim()) {
+            $('#ccName').addClass('is-invalid');
+            return;
+        }
+        const btn = $(this).prop('disabled', true);
+        $.ajax({
+            url: '/customers',
+            method: 'POST',
+            data: new FormData(form),
+            processData: false,
+            contentType: false,
+            dataType: 'json'
+        }).done((res) => {
+            if (res.success) {
+                $('#createCustomerModal').modal('hide');
+                Swal.fire({ icon: 'success', title: 'Customer created', timer: 1200, showConfirmButton: false });
+                selectCustomer(res.customer);
+            } else {
+                showCcErrors(res.errors);
+                btn.prop('disabled', false);
+            }
+        }).fail((xhr) => {
+            const res = xhr.responseJSON || {};
+            if (res.errors) showCcErrors(res.errors);
+            else Swal.fire({ icon: 'error', title: res.message || 'Could not create customer.' });
+            btn.prop('disabled', false);
+        });
+    });
+
+    function showCcErrors(errors) {
+        $('#createCustomerModal input').removeClass('is-invalid');
+        $('#createCustomerModal .invalid-feedback').addClass('d-none').html('');
+        if (!errors) return;
+        for (const key in errors) {
+            const input = $('#createCustomerModal [name="' + key + '"]');
+            if (input.length) {
+                input.addClass('is-invalid');
+                const fb = input.closest('.mb-3').find('.invalid-feedback').length ? input.closest('.mb-3').find('.invalid-feedback') : input.siblings('.invalid-feedback');
+                fb.removeClass('d-none').html(Array.isArray(errors[key]) ? errors[key].join(' ') : errors[key]);
+            }
+        }
+    }
+
+    $('input', $('#createCustomerForm')).on('input', function () {
+        $(this).removeClass('is-invalid');
+    });
+    $('#createCustomerModal').on('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            $('#btnCreateCustomer').trigger('click');
+        }
+    });
+
     /* ---------- Init ---------- */
     window.NHS.init = function () {
-        addPaymentRow('cash', '', '');
+        addItemRow();
         if (BILLING.preselectCustomerId) {
             $.getJSON('/billing/customer/' + BILLING.preselectCustomerId)
                 .done((res) => {

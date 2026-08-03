@@ -1,13 +1,13 @@
 <?php
-/** @var array $employees @var array $services @var float $gstPercent @var int $preselectCustomerId */
+/** @var array $employees @var int $preselectCustomerId */
 ?>
 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-4">
     <div>
-        <h4 class="fw-bold mb-1">New Bill</h4>
-        <p class="text-muted mb-0 small">Add services, allocate to employees and collect payment — all in one place.</p>
+        <h4 class="fw-bold mb-1">New Transaction</h4>
+        <p class="text-muted mb-0 small">Enter the services performed, allocate employees and charge the wallet — all in one place.</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="<?php echo url('/billing/history'); ?>" class="btn btn-light"><i class="fa-solid fa-receipt me-1"></i>Invoice History</a>
+        <a href="<?php echo url('/billing/history'); ?>" class="btn btn-light"><i class="fa-solid fa-receipt me-1"></i>Transactions</a>
     </div>
 </div>
 
@@ -37,7 +37,7 @@
             </div>
         </div>
 
-        <!-- Services -->
+        <!-- Services (custom rows) -->
         <div class="card">
             <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
                 <span class="fw-bold"><i class="fa-solid fa-wand-magic-sparkles me-2 text-success"></i>Services</span>
@@ -50,8 +50,8 @@
                     <table class="table billing-items-table align-middle mb-0" id="billingItemsTable">
                         <thead>
                         <tr>
-                            <th style="min-width:240px">Service</th>
-                            <th style="width:110px" class="text-end">Price (₹)</th>
+                            <th style="min-width:220px">Service Name</th>
+                            <th style="width:130px" class="text-end">Price (₹)</th>
                             <th style="width:70px" class="text-center">Qty</th>
                             <th style="min-width:180px">Employees</th>
                             <th style="width:40px"></th>
@@ -59,7 +59,7 @@
                         </thead>
                         <tbody id="billingItemsBody"><tr class="text-center text-muted"><td colspan="5" style="padding:34px">
                             <i class="fa-solid fa-plus fa-2x d-block mb-2 text-muted-2"></i>
-                            Click <span class="fw-semibold">"Add Service"</span> to start billing.
+                            Click <span class="fw-semibold">"Add Service"</span> and type the service name &amp; price.
                         </td></tr></tbody>
                     </table>
                 </div>
@@ -70,84 +70,36 @@
     <!-- ============ RIGHT 30% ============ -->
     <div class="pos-right">
         <div class="pos-summary-card">
-            <div class="summary-head"><i class="fa-solid fa-credit-card"></i> Bill Summary</div>
+            <div class="summary-head"><i class="fa-solid fa-wallet"></i> Transaction Summary</div>
             <div class="summary-body">
-                <!-- Package balance -->
+                <!-- Wallet balance -->
                 <div class="mb-3">
-                    <div class="fw-bold small text-uppercase text-muted mb-2">Package Balance</div>
+                    <div class="fw-bold small text-uppercase text-muted mb-2">Wallet Balance</div>
                     <div class="package-strip">
                         <div>
                             <div class="text-muted small">Available Balance</div>
                             <div class="fs-5 fw-bold text-success" id="pkgAvailable">₹0.00</div>
                         </div>
                         <div class="text-end">
-                            <div class="text-muted small">Current Package</div>
-                            <div class="fw-semibold small" id="pkgName">—</div>
+                            <div class="text-muted small">Balance After</div>
+                            <div class="fw-semibold" id="tBalanceAfter">₹0.00</div>
                         </div>
                     </div>
                 </div>
 
                 <div class="payment-totals mb-3">
-                    <div class="total-row"><span>Subtotal</span><span class="fw-semibold" id="tSubtotal">₹0.00</span></div>
-                    <div class="total-row align-items-center">
-                        <span>Discount</span>
-                        <div class="d-flex align-items-center gap-1" style="width:130px">
-                            <span class="small">₹</span>
-                            <input type="number" class="form-control form-control-sm text-end" id="tDiscount" min="0" step="0.01" value="0">
-                        </div>
-                    </div>
-                    <div class="total-row align-items-center">
-                        <span>GST</span>
-                        <div class="d-flex align-items-center gap-1" style="width:130px">
-                            <input type="number" class="form-control form-control-sm text-end" id="tGstPercent" min="0" max="100" step="0.01" value="<?php echo (float) $gstPercent; ?>">
-                            <span class="small">%</span>
-                        </div>
-                    </div>
-                    <div class="total-row"><span class="text-muted">GST Amount</span><span id="tGstAmount">₹0.00</span></div>
-                    <div class="total-row"><span class="text-muted">Total</span><span class="fw-semibold" id="tTotal">₹0.00</span></div>
-
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="tUsePackage">
-                        <label class="form-check-label small" for="tUsePackage">Pay from package credits</label>
-                    </div>
-                    <div class="total-row align-items-center" id="pkgRow" style="display:none">
-                        <span>Package Deduction</span>
-                        <div class="d-flex align-items-center gap-1" style="width:130px">
-                            <span class="small">₹</span>
-                            <input type="number" class="form-control form-control-sm text-end" id="tPackageUsed" min="0" step="0.01" value="0">
-                        </div>
-                    </div>
-                    <div class="total-row"><span class="text-muted">Balance After Billing</span><span class="fw-semibold text-success" id="tBalanceAfter">₹0.00</span></div>
-                    <div class="total-row"><span class="text-muted">Outstanding</span><span class="fw-semibold text-danger" id="tOutstanding">₹0.00</span></div>
-                    <div class="total-row grand"><span>Balance</span><span class="amount" id="tPayable">₹0.00</span></div>
-                </div>
-
-                <!-- Payments -->
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="fw-bold small text-uppercase text-muted">Payment</div>
-                        <button type="button" class="btn btn-sm btn-soft" id="btnAddPayment"><i class="fa-solid fa-plus me-1"></i>Split</button>
-                    </div>
-                    <div id="paymentRows"></div>
-                    <div class="d-flex justify-content-between small mt-2 pt-2 border-top">
-                        <span class="text-muted">Payment</span>
-                        <span class="fw-semibold text-success" id="tReceived">₹0.00</span>
-                    </div>
-                    <div class="d-flex justify-content-between small text-muted">
-                        <span>Balance</span>
-                        <span class="fw-bold" id="tDue">₹0.00</span>
-                    </div>
-                    <div class="text-danger small mt-1 d-none" id="payError"><i class="fa-solid fa-circle-exclamation me-1"></i><span id="payErrorMsg"></span></div>
+                    <div class="total-row"><span>Total</span><span class="fw-semibold" id="tTotal">₹0.00</span></div>
+                    <div class="total-row grand"><span>Charge to Wallet</span><span class="amount" id="tPayable">₹0.00</span></div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label">Notes</label>
-                    <textarea class="form-control" id="billNotes" rows="2" placeholder="Optional note on this bill"></textarea>
+                    <textarea class="form-control" id="billNotes" rows="2" placeholder="Optional note on this transaction"></textarea>
                 </div>
 
                 <div class="d-grid gap-2">
                     <button type="button" class="btn btn-primary btn-lg" id="btnGenerateInvoice">
-                        <i class="fa-solid fa-file-invoice me-2"></i>Generate Invoice
+                        <i class="fa-solid fa-bolt me-2"></i>Create Transaction
                     </button>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-light flex-fill" id="btnSaveDraft">Save Draft</button>
@@ -187,10 +139,96 @@
     </div>
 </div>
 
+<!-- Exceeds balance modal -->
+<div class="modal fade" id="exceedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title text-danger"><i class="fa-solid fa-circle-exclamation me-2"></i>Amount Exceeds Balance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">The transaction total of <strong id="exceedTotal">₹0.00</strong> exceeds the customer's wallet balance of <strong id="exceedBalance">₹0.00</strong>.</p>
+                <p class="text-muted small mb-0">Collect the shortfall of <strong id="exceedShortfall" class="text-danger">₹0.00</strong> outside the software, then mark this transaction as received.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Go Back</button>
+                <button type="button" class="btn btn-primary" id="btnMarkReceived">
+                    <i class="fa-solid fa-check me-1"></i>Mark as Received
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Nullify modal -->
+<div class="modal fade" id="nullifyModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title text-warning"><i class="fa-solid fa-scale-balanced me-2"></i>Negative Balance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Transaction created. The wallet balance is now <strong id="nullifyAmount" class="text-danger">₹0.00</strong>.</p>
+                <p class="text-muted small mb-0">Attach a custom package of the same balance to nullify the negative. This records the amount collected outside.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Later</button>
+                <a href="#" class="btn btn-primary" id="btnNullifyPackage">
+                    <i class="fa-solid fa-box-open me-1"></i>Attach Custom Package
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create customer modal -->
+<div class="modal fade" id="createCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa-solid fa-user-plus me-2"></i>Create Customer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createCustomerForm" novalidate>
+                    <?php echo csrf_field(); ?>
+                    <div class="mb-3">
+                        <label class="form-label" for="ccName">Full name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="ccName" name="name" required>
+                        <div class="invalid-feedback d-none" data-error-for="name"></div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label" for="ccPhone">Mobile</label>
+                            <input type="tel" class="form-control" id="ccPhone" name="phone">
+                            <div class="invalid-feedback d-none" data-error-for="phone"></div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="ccEmail">Email</label>
+                            <input type="email" class="form-control" id="ccEmail" name="email">
+                            <div class="invalid-feedback d-none" data-error-for="email"></div>
+                        </div>
+                    </div>
+                    <div class="mb-0 mt-3">
+                        <label class="form-label" for="ccAddress">Address</label>
+                        <input type="text" class="form-control" id="ccAddress" name="address">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btnCreateCustomer">
+                    <i class="fa-solid fa-check me-1"></i>Create &amp; Select
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     window.BILLING = {
         employees: <?php echo json_encode(array_map(fn ($e) => ['id' => (int) $e['id'], 'name' => $e['name']], $employees)); ?>,
-        services: <?php echo json_encode(array_map(fn ($s) => ['id' => (int) $s['id'], 'name' => $s['name'], 'price' => (float) $s['price']], $services)); ?>,
         preselectCustomerId: <?php echo (int) $preselectCustomerId; ?>
     };
 </script>

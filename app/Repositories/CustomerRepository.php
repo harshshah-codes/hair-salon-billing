@@ -173,7 +173,8 @@ final class CustomerRepository extends BaseRepository
                               WHERE i.customer_id = c.id AND i.status IN ('issued','partially_paid'))";
         $stmt = $this->db->prepare(
             "SELECT c.id, c.name, c.email, c.mobile, {$outstandingExpr} AS outstanding,
-                    (SELECT COALESCE(SUM(cp.remaining_credits),0) FROM customer_packages cp
+                    (SELECT COALESCE(SUM(ROUND(cp.remaining_credits * COALESCE(NULLIF(cp.value_per_credit,0), cp.selling_price / NULLIF(cp.credits,0), 0), 2)),0)
+                      FROM customer_packages cp
                       WHERE cp.customer_id = c.id AND cp.status='active'
                         AND (cp.expires_on IS NULL OR cp.expires_on >= CURDATE())) AS available_balance,
                     (SELECT cp.name FROM customer_packages cp

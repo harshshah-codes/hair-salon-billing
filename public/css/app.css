@@ -542,6 +542,13 @@ html[data-theme="dark"] .badge.bg-secondary-soft { background: #1a2440 !importan
 .pos-left { flex: 0 0 70%; max-width: 70%; }
 .pos-right { flex: 0 0 30%; max-width: 30%; }
 
+.customer-search-wrap .customer-results {
+    z-index: 1080;
+    max-height: 360px;
+    overflow-y: auto;
+}
+.billing-items-table select.form-select-sm { min-height: 32px; }
+
 .billing-items-table .qty-input { width: 62px; }
 .billing-items-table .price-input { width: 104px; }
 .billing-items-table .alloc-btn { white-space: nowrap; }

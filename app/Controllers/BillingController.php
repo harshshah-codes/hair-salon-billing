@@ -18,7 +18,6 @@ use App\Repositories\CustomerPackageRepository;
 use App\Repositories\CustomerRepository;
 use App\Repositories\EmployeeRepository;
 use App\Repositories\InvoiceRepository;
-use App\Repositories\ServiceRepository;
 use App\Services\ActivityService;
 use App\Services\BillingService;
 use RuntimeException;
@@ -28,11 +27,9 @@ class BillingController extends Controller
     public function index(): void
     {
         $this->render('billing.index', [
-            'title' => 'New Bill',
+            'title' => 'New Transaction',
             'active' => 'billing',
             'employees' => (new EmployeeRepository())->active(),
-            'services' => (new ServiceRepository())->active(),
-            'gstPercent' => (float) setting('gst_percent', 18),
             'preselectCustomerId' => (int) $this->request->query('customer_id', 0),
             'breadcrumbs' => ['Billing' => '/billing'],
             'scripts' => ['js/pages/billing.js'],
@@ -87,23 +84,23 @@ class BillingController extends Controller
     public function store(): void
     {
         $draft = (bool) $this->request->input('draft', false);
+        $allowOverrun = (bool) $this->request->input('allow_overrun', false);
 
-        // Normalize nested items/payments arrays
+        // Normalize nested items arrays
         $items = [];
         $names = $this->request->input('items_name', []);
         $prices = $this->request->input('items_price', []);
         $qtys = $this->request->input('items_qty', []);
-        $services = $this->request->input('items_service', []);
         $allocEmp = $this->request->input('alloc_employee', []);
         $allocAmount = $this->request->input('alloc_amount', []);
 
-        $count = max(count($names), count($services));
+        $count = count($names);
         for ($i = 0; $i < $count; $i++) {
-            if (empty($services[$i]) && empty($names[$i])) {
+            if (empty($names[$i])) {
                 continue;
             }
             $item = [
-                'service_id' => (int) ($services[$i] ?? 0),
+                'service_id' => null,
                 'name' => (string) ($names[$i] ?? ''),
                 'price' => (float) ($prices[$i] ?? 0),
                 'qty' => max(1, (int) ($qtys[$i] ?? 1)),
@@ -120,27 +117,12 @@ class BillingController extends Controller
             $items[] = $item;
         }
 
-        $payments = [];
-        $payMethods = $this->request->input('pay_method', []);
-        $payAmounts = $this->request->input('pay_amount', []);
-        $payRefs = $this->request->input('pay_reference', []);
-        $pCount = max(count($payMethods), count($payAmounts));
-        for ($i = 0; $i < $pCount; $i++) {
-            $payments[] = [
-                'method' => (string) ($payMethods[$i] ?? 'cash'),
-                'amount' => (float) ($payAmounts[$i] ?? 0),
-                'reference' => (string) ($payRefs[$i] ?? ''),
-            ];
-        }
-
         $payload = [
             'customer_id' => (int) $this->request->input('customer_id'),
             'items' => $items,
-            'discount_type' => 'flat',
-            'discount_value' => (float) $this->request->input('discount', 0),
-            'gst_rate' => (float) $this->request->input('gst_percent', setting('gst_percent', 18)),
             'package_used' => (float) $this->request->input('package_used', 0),
-            'payments' => $payments,
+            'allow_overrun' => $allowOverrun,
+            'payments' => [],
             'notes' => (string) $this->request->input('notes'),
         ];
 
@@ -160,13 +142,45 @@ class BillingController extends Controller
 
         try {
             $invoiceId = $service->createInvoice($payload, $draft ? 'draft' : 'final');
-            $this->json([
+
+            $response = [
                 'success' => true,
-                'message' => $draft ? 'Draft saved.' : 'Invoice generated successfully.',
+                'message' => $draft ? 'Draft saved.' : 'Transaction created successfully.',
                 'invoice_id' => $invoiceId,
-            ]);
+                'customer_id' => (int) $payload['customer_id'],
+            ];
+
+            if ($allowOverrun && !$draft) {
+                $negative = $this->walletBalance((int) $payload['customer_id']);
+                if ($negative < 0) {
+                    $response['negative_balance'] = $negative;
+                }
+            }
+
+            $this->json($response);
         } catch (RuntimeException $e) {
             $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
+    }
+
+    private function walletBalance(int $customerId): float
+    {
+        $packages = $this->db->fetchAll(
+            "SELECT cp.`remaining_credits`, cp.`credits`, cp.`selling_price`, cp.`value_per_credit`
+             FROM customer_packages cp
+             WHERE cp.`customer_id` = ? AND cp.`deleted_at` IS NULL
+               AND (cp.`expires_on` IS NULL OR cp.`expires_on` >= CURDATE())",
+            [$customerId]
+        );
+
+        $balance = 0.0;
+        foreach ($packages as $pkg) {
+            $vpc = (float) ($pkg['value_per_credit'] ?? 0);
+            if ($vpc <= 0 && (float) ($pkg['credits'] ?? 0) > 0) {
+                $vpc = (float) ($pkg['selling_price'] ?? 0) / (float) $pkg['credits'];
+            }
+            $balance += (float) ($pkg['remaining_credits'] ?? 0) * $vpc;
+        }
+        return round($balance, 2);
     }
 }

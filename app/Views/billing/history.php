@@ -6,11 +6,11 @@
 ?>
 <div class="page-header">
     <div>
-        <h1>Invoice History</h1>
-        <p>Search and manage all generated invoices.</p>
+        <h1>Transactions</h1>
+        <p>All transactions created against customers.</p>
     </div>
     <div class="page-actions">
-        <a href="<?= e(url('/billing')) ?>" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>New Bill</a>
+        <a href="<?= e(url('/billing')) ?>" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>New Transaction</a>
     </div>
 </div>
 

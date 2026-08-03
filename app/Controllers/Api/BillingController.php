@@ -17,7 +17,6 @@ use App\Repositories\CustomerPackageRepository;
 use App\Repositories\CustomerRepository;
 use App\Repositories\EmployeeRepository;
 use App\Repositories\InvoiceRepository;
-use App\Repositories\ServiceRepository;
 use App\Services\ActivityService;
 use App\Services\BillingService;
 use RuntimeException;
@@ -41,13 +40,11 @@ final class BillingController extends ApiController
         );
     }
 
-    /** GET /api/billing/options — services, employees, default GST */
+    /** GET /api/billing/options — employees (services are custom per transaction) */
     public function options(): void
     {
         $this->ok([
-            'services' => (new ServiceRepository())->active(),
             'employees' => (new EmployeeRepository())->active(),
-            'gst_percent' => (float) setting('gst_percent', 18),
         ]);
     }
 
@@ -171,19 +168,13 @@ final class BillingController extends ApiController
         $json = $this->request->isJson() ? $this->request->json() : [];
 
         if (isset($json['items']) && is_array($json['items'])) {
-            // Structured payload — pass through (compute() also reads discount_type/discount_value,
-            // but POS sends discount/gst_percent; bridge them here).
+            // Structured payload — pass through; compute() reads package_usage/package_used
+            // and allow_overrun. Default allow_overrun to false.
             $payload = $json;
-            if (!isset($payload['discount_type']) && isset($payload['discount'])) {
-                $payload['discount_type'] = 'flat';
-                $payload['discount_value'] = $payload['discount'];
-            }
-            if (!isset($payload['gst_rate']) && isset($payload['gst_percent'])) {
-                $payload['gst_rate'] = $payload['gst_percent'];
-            }
             if (!isset($payload['package_usage']) && isset($payload['package_used'])) {
                 $payload['package_usage'] = ['amount' => $payload['package_used']];
             }
+            $payload['allow_overrun'] = (bool)($payload['allow_overrun'] ?? $payload['mark_received'] ?? false);
             return $payload;
         }
 
@@ -192,17 +183,16 @@ final class BillingController extends ApiController
         $names = $this->request->input('items_name', []);
         $prices = $this->request->input('items_price', []);
         $qtys = $this->request->input('items_qty', []);
-        $services = $this->request->input('items_service', []);
         $allocEmp = $this->request->input('alloc_employee', []);
         $allocAmount = $this->request->input('alloc_amount', []);
 
-        $count = max(count($names), count($services));
+        $count = count($names);
         for ($i = 0; $i < $count; $i++) {
-            if (empty($services[$i]) && empty($names[$i])) {
+            if (empty($names[$i])) {
                 continue;
             }
             $item = [
-                'service_id' => (int) ($services[$i] ?? 0),
+                'service_id' => null,
                 'name' => (string) ($names[$i] ?? ''),
                 'price' => (float) ($prices[$i] ?? 0),
                 'qty' => max(1, (int) ($qtys[$i] ?? 1)),
@@ -219,27 +209,12 @@ final class BillingController extends ApiController
             $items[] = $item;
         }
 
-        $payments = [];
-        $payMethods = $this->request->input('pay_method', []);
-        $payAmounts = $this->request->input('pay_amount', []);
-        $payRefs = $this->request->input('pay_reference', []);
-        $pCount = max(count($payMethods), count($payAmounts));
-        for ($i = 0; $i < $pCount; $i++) {
-            $payments[] = [
-                'method' => (string) ($payMethods[$i] ?? 'cash'),
-                'amount' => (float) ($payAmounts[$i] ?? 0),
-                'reference' => (string) ($payRefs[$i] ?? ''),
-            ];
-        }
-
         return [
             'customer_id' => (int) $this->request->input('customer_id'),
             'items' => $items,
-            'discount_type' => 'flat',
-            'discount_value' => (float) $this->request->input('discount', 0),
-            'gst_rate' => (float) $this->request->input('gst_percent', setting('gst_percent', 18)),
             'package_used' => (float) $this->request->input('package_used', 0),
-            'payments' => $payments,
+            'allow_overrun' => (bool) $this->request->input('allow_overrun', false),
+            'payments' => [],
             'notes' => (string) $this->request->input('notes'),
         ];
     }

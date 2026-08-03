@@ -63,8 +63,8 @@
         <ul class="nav nav-tabs px-3 pt-2" id="customerTabs" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabOverview">Overview</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPackages">Packages <span class="badge bg-secondary-soft"><?php echo count($allPackages); ?></span></button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabBills">Billing History</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabLedger">Ledger</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabBills">Statement</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabLedger">Wallet Ledger</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabNotes">Notes <span class="badge bg-secondary-soft"><?php echo count($notes); ?></span></button></li>
         </ul>
     </div>
@@ -75,13 +75,13 @@
             <div class="tab-pane fade show active" id="tabOverview">
                 <div class="row g-4">
                     <div class="col-lg-7">
-                        <h6 class="fw-bold mb-3"><i class="fa-solid fa-file-invoice me-2 text-success"></i>Recent Bills</h6>
+                        <h6 class="fw-bold mb-3"><i class="fa-solid fa-file-invoice me-2 text-success"></i>Recent Transactions</h6>
                         <?php if (empty($invoices)): ?>
                             <?php include APP_PATH . '/Views/partials/empty_state.php'; ?>
                         <?php else: ?>
                             <div class="table-responsive">
                                 <table class="table table-hover mb-0">
-                                    <thead><tr><th>Invoice</th><th>Date</th><th class="text-end">Total</th><th class="text-end">Balance</th><th>Status</th></tr></thead>
+                                    <thead><tr><th>Transaction</th><th>Date</th><th class="text-end">Total</th><th class="text-end">Balance</th><th>Status</th></tr></thead>
                                     <tbody>
                                     <?php foreach (array_slice($invoices, 0, 6) as $inv): ?>
                                         <tr>
@@ -188,21 +188,20 @@
                 <?php endif; ?>
             </div>
 
-            <!-- Billing History -->
+            <!-- Statement -->
             <div class="tab-pane fade" id="tabBills">
                 <?php if (empty($invoices)): ?>
                     <?php include APP_PATH . '/Views/partials/empty_state.php'; ?>
                 <?php else: ?>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
-                            <thead><tr><th>Invoice</th><th>Date</th><th class="text-end">Subtotal</th><th class="text-end">GST</th><th class="text-end">Total</th><th class="text-end">Package Used</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th>Status</th><th>By</th></tr></thead>
+                            <thead><tr><th>Transaction</th><th>Date</th><th class="text-end">Subtotal</th><th class="text-end">Total</th><th class="text-end">Wallet Charged</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th>Status</th><th>By</th></tr></thead>
                             <tbody>
                             <?php foreach ($invoices as $inv): ?>
                                 <tr>
                                     <td><a href="<?php echo url('/billing/invoice/' . $inv['id']); ?>" class="fw-semibold"><?php echo e($inv['invoice_number']); ?></a></td>
                                     <td class="text-nowrap"><?php echo format_date($inv['invoice_date']); ?></td>
                                     <td class="text-end"><?php echo money($inv['subtotal']); ?></td>
-                                    <td class="text-end"><?php echo money($inv['gst_amount']); ?></td>
                                     <td class="text-end fw-semibold"><?php echo money($inv['total']); ?></td>
                                     <td class="text-end"><?php echo money($inv['package_used']); ?></td>
                                     <td class="text-end"><?php echo money($inv['paid']); ?></td>
