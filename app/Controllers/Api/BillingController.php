@@ -173,7 +173,6 @@ final class BillingController extends ApiController
             if (!isset($payload['package_usage']) && isset($payload['package_used'])) {
                 $payload['package_usage'] = ['amount' => $payload['package_used']];
             }
-            $payload['top_up'] = (float)($payload['top_up'] ?? 0);
             return $payload;
         }
 
@@ -212,7 +211,6 @@ final class BillingController extends ApiController
             'customer_id' => (int) $this->request->input('customer_id'),
             'items' => $items,
             'package_used' => (float) $this->request->input('package_used', 0),
-            'top_up' => (float) $this->request->input('top_up', 0),
             'payments' => [],
             'notes' => (string) $this->request->input('notes'),
         ];

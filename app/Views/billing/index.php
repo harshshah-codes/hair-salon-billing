@@ -11,7 +11,7 @@
     </div>
 </div>
 
-<div class="d-flex flex-wrap gap-3 align-items-start pos-layout">
+<div class="pos-layout">
     <!-- ============ LEFT 70% ============ -->
     <div class="pos-left">
         <!-- Customer lookup -->
@@ -50,10 +50,11 @@
                     <table class="table billing-items-table align-middle mb-0" id="billingItemsTable">
                         <thead>
                         <tr>
+                            <th style="width:150px">Date</th>
                             <th style="min-width:220px">Service Name</th>
+                            <th style="min-width:180px">Allocation</th>
                             <th style="width:130px" class="text-end">Price (₹)</th>
                             <th style="width:70px" class="text-center">Qty</th>
-                            <th style="min-width:180px">Employees</th>
                             <th style="width:40px"></th>
                         </tr>
                         </thead>
@@ -101,10 +102,7 @@
                     <button type="button" class="btn btn-primary btn-lg" id="btnGenerateInvoice">
                         <i class="fa-solid fa-bolt me-2"></i>Create Transaction
                     </button>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-light flex-fill" id="btnSaveDraft">Save Draft</button>
-                        <button type="button" class="btn btn-light flex-fill" id="btnCancelBill">Cancel</button>
-                    </div>
+                    <button type="button" class="btn btn-light" id="btnCancelBill">Cancel</button>
                 </div>
             </div>
         </div>
@@ -139,76 +137,8 @@
     </div>
 </div>
 
-<!-- Exceeds balance modal -->
-<div class="modal fade" id="exceedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title text-warning"><i class="fa-solid fa-wallet me-2"></i>Add Wallet Top-up</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="mb-2">This transaction totals <strong id="exceedTotal">₹0.00</strong> but the wallet balance is <strong id="exceedBalance">₹0.00</strong>.</p>
-                <p class="text-success fw-semibold mb-3">Add a one-time, lifetime top-up of <strong id="exceedShortfall">₹0.00</strong> to cover it.</p>
-                <div class="input-group input-group-lg">
-                    <span class="input-group-text">₹</span>
-                    <input type="number" class="form-control" id="topUpAmount" step="0.01" min="0">
-                </div>
-                <div class="form-text mt-2">The top-up is added to the wallet and applied to this transaction immediately. No expiry.</div>
-            </div>
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="btnTopUpAndCreate">
-                    <i class="fa-solid fa-check me-1"></i>Add Top-up &amp; Create
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-
 <!-- Create customer modal -->
-<div class="modal fade" id="createCustomerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fa-solid fa-user-plus me-2"></i>Create Customer</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="createCustomerForm" novalidate>
-                    <?php echo csrf_field(); ?>
-                    <div class="mb-3">
-                        <label class="form-label" for="ccName">Full name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="ccName" name="name" required>
-                        <div class="invalid-feedback d-none" data-error-for="name"></div>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-6">
-                            <label class="form-label" for="ccPhone">Mobile</label>
-                            <input type="tel" class="form-control" id="ccPhone" name="phone">
-                            <div class="invalid-feedback d-none" data-error-for="phone"></div>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label" for="ccEmail">Email</label>
-                            <input type="email" class="form-control" id="ccEmail" name="email">
-                            <div class="invalid-feedback d-none" data-error-for="email"></div>
-                        </div>
-                    </div>
-                    <div class="mb-0 mt-3">
-                        <label class="form-label" for="ccAddress">Address</label>
-                        <input type="text" class="form-control" id="ccAddress" name="address">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="btnCreateCustomer">
-                    <i class="fa-solid fa-check me-1"></i>Create &amp; Select
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<?php include APP_PATH . '/Views/partials/create_customer_modal.php'; ?>
 
 <script>
     window.BILLING = {

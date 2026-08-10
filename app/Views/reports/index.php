@@ -267,30 +267,32 @@ $isRevenue = $current === 'revenue';
         <div class="card-header"><h5 class="mb-0">Customer Statement</h5></div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead><tr><th>Date</th><th>Type</th><th>Description</th><th class="text-end">Amount</th><th class="text-end">Balance</th></tr></thead>
+                <thead><tr><th>Date</th><th>Service / Package</th><th>Stylist</th><th>Branch</th><th class="text-end">Amount</th><th class="text-end">Balance</th></tr></thead>
                 <tbody>
                 <?php if (empty($rows)): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-4">Select a customer to view their statement</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4">Select a customer to view their statement</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $row): ?>
                         <?php
                             $amount = (float) $row['amount'];
                             $bal = (float) $row['wallet_balance'];
                             $isCredit = !empty($row['is_credit']);
-                            $desc = $row['package_name'] ?? ($row['invoice_number'] ?? '');
-                            if ($row['type'] === 'debit') {
-                                $desc = ($row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? ''));
-                                if (!empty($row['employees'])) {
-                                    $desc .= ' — by ' . $row['employees'];
+                            if (in_array($row['type'], ['debit', 'bill'], true)) {
+                                $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
+                            } else {
+                                $service = $row['package_name'] ?: ($row['invoice_number'] ?: 'Package purchase');
+                                if (!empty($row['services'])) {
+                                    $service = trim($row['services']) . ' — ' . $service;
                                 }
-                            } elseif (!empty($row['services'])) {
-                                $desc = trim($row['services']) . ' — ' . $desc;
                             }
+                            $stylist = $row['employees'] ?? '';
+                            $branch = $row['branch'] ?? '';
                         ?>
                         <tr>
-                            <td class="text-muted text-nowrap"><?= e(format_datetime($row['created_at'])) ?></td>
-                            <td><span class="badge bg-secondary-soft"><?= e($row['type']) ?></span></td>
-                            <td><?= e($desc) ?></td>
+                            <td class="text-muted text-nowrap"><?= e(format_date($row['service_date'] ?? $row['created_at'])) ?></td>
+                            <td class="whitespace-pre-line"><?= e($service) ?></td>
+                            <td class="small"><?= e($stylist ?: '—') ?></td>
+                            <td class="small text-muted"><?= e($branch ?: '—') ?></td>
                             <td class="text-end <?= $isCredit ? 'text-success' : 'text-danger' ?> fw-semibold">
                                 <?= $isCredit ? '+' : '−' ?><?= e(money(abs($amount))) ?>
                             </td>

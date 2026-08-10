@@ -42,10 +42,12 @@
             <i class="fa-solid fa-chart-line"></i><span>Reports</span>
         </a>
 
+        <?php if (can('settings.view')): ?>
         <span class="nav-label">System</span>
         <a class="nav-item <?php echo active_class('settings', $active ?? ''); ?>" href="<?php echo url('/settings'); ?>">
             <i class="fa-solid fa-gear"></i><span>Settings</span>
         </a>
+        <?php endif; ?>
     </nav>
 
     <div class="sidebar-footer">

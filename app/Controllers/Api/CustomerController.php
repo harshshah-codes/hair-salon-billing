@@ -162,6 +162,7 @@ final class CustomerController extends ApiController
             'credits' => 'nullable|integer|min:1',
             'validity_days' => 'nullable|integer|min:1|max:3650',
             'notes' => 'nullable|max:500',
+            'sold_by' => 'required|integer|exists:employees,id',
         ]);
 
         $source = $this->request->input('source', $this->request->input('package_type', 'predefined'));
@@ -173,6 +174,7 @@ final class CustomerController extends ApiController
             'credits' => $data['credits'] ?? 0,
             'validity_days' => $data['validity_days'] ?? null,
             'notes' => $data['notes'] ?? null,
+            'sold_by' => $data['sold_by'] ?? null,
         ];
 
         try {

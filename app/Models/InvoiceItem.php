@@ -10,5 +10,5 @@ final class InvoiceItem extends Model
 {
     protected string $table = 'invoice_items';
     protected bool $softDeletes = false;
-    protected array $fillable = ['invoice_id', 'service_id', 'description', 'price', 'qty', 'amount'];
+    protected array $fillable = ['invoice_id', 'service_id', 'description', 'price', 'qty', 'amount', 'service_date'];
 }

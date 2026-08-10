@@ -66,9 +66,9 @@ if (strlen($password) < 6) {
     exit(1);
 }
 
-$role = $pdo->query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")->fetch();
+$role = $pdo->query("SELECT id FROM roles WHERE slug = 'superadmin' LIMIT 1")->fetch();
 if (!$role) {
-    fwrite(STDERR, "Admin role not found. Schema may have failed.\n");
+    fwrite(STDERR, "Superadmin role not found. Schema may have failed.\n");
     exit(1);
 }
 

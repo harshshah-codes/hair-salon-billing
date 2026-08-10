@@ -155,7 +155,7 @@ class Validator
                 $ignoreId = $parts[2] ?? null;
                 if ($table) {
                     $db = App::getInstance()->db;
-                    $sql = "SELECT COUNT(*) FROM `$table` WHERE `$column` = ? AND `deleted_at` IS NULL";
+                    $sql = "SELECT COUNT(*) FROM `$table` WHERE `$column` = ?" . $this->softDeleteClause($table);
                     $params = [$value];
                     if ($ignoreId !== null && $ignoreId !== '') {
                         $sql .= " AND `id` != ?";
@@ -172,12 +172,31 @@ class Validator
                 $column = $parts[1] ?? 'id';
                 if ($table) {
                     $db = App::getInstance()->db;
-                    $sql = "SELECT COUNT(*) FROM `$table` WHERE `$column` = ? AND `deleted_at` IS NULL";
+                    $sql = "SELECT COUNT(*) FROM `$table` WHERE `$column` = ?" . $this->softDeleteClause($table);
                     if ($db->count($sql, [$value]) === 0) {
                         $this->addError($field, sprintf($this->messages['exists'], $label));
                     }
                 }
                 break;
+        }
+    }
+
+    /**
+     * Whether the given table has a soft-delete (deleted_at) column.
+     * Falls back to checking information_schema; tables without the
+     * column (e.g. branches) skip the soft-delete filter.
+     */
+    private function softDeleteClause(string $table): string
+    {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+            return '';
+        }
+        try {
+            $db = App::getInstance()->db;
+            $row = $db->query("SHOW COLUMNS FROM `$table` LIKE 'deleted_at'")->fetch();
+            return $row ? ' AND `deleted_at` IS NULL' : '';
+        } catch (\Throwable $e) {
+            return '';
         }
     }
 

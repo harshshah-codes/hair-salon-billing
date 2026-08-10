@@ -10,6 +10,19 @@
     </div>
 </div>
 
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <label class="form-label fw-semibold" for="dashboardCustomerSearch"><i class="fa-solid fa-magnifying-glass me-1"></i>Find a customer</label>
+        <div class="position-relative">
+            <input type="text" class="form-control form-control-lg" id="dashboardCustomerSearch"
+                   placeholder="Search by name or mobile…" autocomplete="off">
+            <div id="dashboardCustomerResults" class="list-group position-absolute w-100 d-none"
+                 style="z-index:1050;max-height:340px;overflow-y:auto;box-shadow:0 .5rem 1rem rgba(0,0,0,.15)"></div>
+        </div>
+        <div class="form-text">Select a customer to jump straight into billing, or create a new one.</div>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-6 col-md-4 col-lg-3 col-xl-2">
         <a href="<?= e(url('/billing')) ?>" class="card quick-link">
@@ -76,3 +89,5 @@
         </a>
     </div>
 </div>
+
+<?php include APP_PATH . '/Views/partials/create_customer_modal.php'; ?>

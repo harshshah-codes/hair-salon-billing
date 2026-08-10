@@ -84,7 +84,7 @@ class Database
             Logger::info("Applied {$file}");
         }
 
-        $role = $this->pdo->query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")->fetch();
+        $role = $this->pdo->query("SELECT id FROM roles WHERE slug = 'superadmin' LIMIT 1")->fetch();
         if ($role) {
             $email    = getenv('DB_ADMIN_EMAIL') ?: 'admin@salon.local';
             $password = getenv('DB_ADMIN_PASSWORD') ?: 'admin123';
@@ -94,7 +94,7 @@ class Database
                  ON DUPLICATE KEY UPDATE role_id = VALUES(role_id), password = VALUES(password)"
             );
             $stmt->execute([(int) $role['id'], $email, password_hash($password, PASSWORD_DEFAULT)]);
-            Logger::info('Admin account ready', ['email' => $email]);
+            Logger::info('Superadmin account ready', ['email' => $email]);
         }
     }
 

@@ -66,7 +66,9 @@ $breadcrumbs = $breadcrumbs ?? [];
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                 <li><a class="dropdown-item" href="<?php echo url('/profile'); ?>"><i class="fa-solid fa-user me-2"></i>My Profile</a></li>
+                <?php if (can('settings.view')): ?>
                 <li><a class="dropdown-item" href="<?php echo url('/settings'); ?>"><i class="fa-solid fa-gear me-2"></i>Settings</a></li>
+                <?php endif; ?>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                     <form method="post" action="<?php echo url('/auth/logout'); ?>">

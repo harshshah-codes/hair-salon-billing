@@ -30,9 +30,10 @@ class BillingController extends Controller
             'title' => 'New Transaction',
             'active' => 'billing',
             'employees' => (new EmployeeRepository())->active(),
+            'templates' => (new \App\Repositories\PackageRepository())->active(),
             'preselectCustomerId' => (int) $this->request->query('customer_id', 0),
             'breadcrumbs' => ['Billing' => '/billing'],
-            'scripts' => ['js/pages/billing.js'],
+            'scripts' => ['js/create-customer.js', 'js/pages/billing.js'],
         ]);
     }
 
@@ -90,6 +91,7 @@ class BillingController extends Controller
         $names = $this->request->input('items_name', []);
         $prices = $this->request->input('items_price', []);
         $qtys = $this->request->input('items_qty', []);
+        $dates = $this->request->input('items_date', []);
         $allocEmp = $this->request->input('alloc_employee', []);
         $allocAmount = $this->request->input('alloc_amount', []);
 
@@ -103,6 +105,7 @@ class BillingController extends Controller
                 'name' => (string) ($names[$i] ?? ''),
                 'price' => (float) ($prices[$i] ?? 0),
                 'qty' => max(1, (int) ($qtys[$i] ?? 1)),
+                'date' => !empty($dates[$i]) ? (string) $dates[$i] : date('Y-m-d'),
                 'allocations' => [],
             ];
             if (isset($allocEmp[$i]) && is_array($allocEmp[$i])) {
@@ -120,8 +123,6 @@ class BillingController extends Controller
             'customer_id' => (int) $this->request->input('customer_id'),
             'items' => $items,
             'package_used' => (float) $this->request->input('package_used', 0),
-            'top_up' => (float) $this->request->input('top_up', 0),
-            'top_up_name' => (string) $this->request->input('top_up_name', 'Wallet Top-up'),
             'payments' => [],
             'notes' => (string) $this->request->input('notes'),
         ];

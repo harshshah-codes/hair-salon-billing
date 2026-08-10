@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS `roles` (
 CREATE TABLE IF NOT EXISTS `users` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `role_id` INT UNSIGNED NOT NULL,
+    `branch_id` INT UNSIGNED NULL,
     `name` VARCHAR(120) NOT NULL,
     `email` VARCHAR(160) NOT NULL,
     `password` VARCHAR(255) NOT NULL,
@@ -43,8 +44,10 @@ CREATE TABLE IF NOT EXISTS `users` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_users_email` (`email`),
     KEY `idx_users_role` (`role_id`),
+    KEY `idx_users_branch` (`branch_id`),
     KEY `idx_users_status` (`status`),
-    CONSTRAINT `fk_users_role` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`)
+    CONSTRAINT `fk_users_role` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`),
+    CONSTRAINT `fk_users_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -76,10 +79,27 @@ CREATE TABLE IF NOT EXISTS `customers` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
+-- Branches (salon outlets). Employees belong to a branch; all
+-- other data (customers, services, packages, billing) is global.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `branches` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(160) NOT NULL,
+    `address` VARCHAR(255) NULL,
+    `phone` VARCHAR(20) NULL,
+    `status` ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_branches_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
 -- Employees
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `employees` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `branch_id` INT UNSIGNED NOT NULL,
     `name` VARCHAR(160) NOT NULL,
     `mobile` VARCHAR(20) NOT NULL,
     `email` VARCHAR(160) NULL,
@@ -95,7 +115,9 @@ CREATE TABLE IF NOT EXISTS `employees` (
     UNIQUE KEY `uq_employees_mobile` (`mobile`),
     KEY `idx_employees_name` (`name`),
     KEY `idx_employees_status` (`status`),
-    FULLTEXT KEY `ft_employees_name` (`name`)
+    KEY `idx_employees_branch` (`branch_id`),
+    FULLTEXT KEY `ft_employees_name` (`name`),
+    CONSTRAINT `fk_employees_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -145,16 +167,18 @@ CREATE TABLE IF NOT EXISTS `customer_packages` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `customer_id` INT UNSIGNED NOT NULL,
     `package_id` INT UNSIGNED NULL,
+    `sold_by` INT UNSIGNED NOT NULL,
     `name` VARCHAR(160) NOT NULL,
     `selling_price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     `credits` INT UNSIGNED NOT NULL DEFAULT 0,
     `remaining_credits` DECIMAL(10,2) NOT NULL DEFAULT 0,
     `value_per_credit` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    `validity_days` INT UNSIGNED NOT NULL DEFAULT 30,
+    `validity_days` INT UNSIGNED NULL,
     `starts_on` DATE NOT NULL,
     `expires_on` DATE NULL,
     `status` ENUM('active','expired','exhausted','cancelled') NOT NULL DEFAULT 'active',
     `notes` TEXT NULL,
+    `branch_address` VARCHAR(255) NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted_at` TIMESTAMP NULL DEFAULT NULL,
@@ -163,8 +187,10 @@ CREATE TABLE IF NOT EXISTS `customer_packages` (
     KEY `idx_cp_package` (`package_id`),
     KEY `idx_cp_status` (`status`),
     KEY `idx_cp_expires` (`expires_on`),
+    KEY `idx_cp_sold_by` (`sold_by`),
     CONSTRAINT `fk_cp_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
-    CONSTRAINT `fk_cp_package` FOREIGN KEY (`package_id`) REFERENCES `packages` (`id`) ON DELETE SET NULL
+    CONSTRAINT `fk_cp_package` FOREIGN KEY (`package_id`) REFERENCES `packages` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_cp_sold_by` FOREIGN KEY (`sold_by`) REFERENCES `employees` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -209,6 +235,7 @@ CREATE TABLE IF NOT EXISTS `invoices` (
     `notes` TEXT NULL,
     `invoice_date` DATE NOT NULL,
     `due_date` DATE NULL,
+    `branch_id` INT UNSIGNED NULL,
     `created_by` INT UNSIGNED NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -219,7 +246,9 @@ CREATE TABLE IF NOT EXISTS `invoices` (
     KEY `idx_invoices_status` (`status`),
     KEY `idx_invoices_date` (`invoice_date`),
     KEY `idx_invoices_created` (`created_at`),
+    KEY `idx_invoices_branch` (`branch_id`),
     CONSTRAINT `fk_invoices_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
+    CONSTRAINT `fk_invoices_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`id`) ON DELETE SET NULL,
     CONSTRAINT `fk_invoices_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -234,10 +263,12 @@ CREATE TABLE IF NOT EXISTS `invoice_items` (
     `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     `qty` INT UNSIGNED NOT NULL DEFAULT 1,
     `amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `service_date` DATE NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_items_invoice` (`invoice_id`),
     KEY `idx_items_service` (`service_id`),
+    KEY `idx_items_service_date` (`service_date`),
     CONSTRAINT `fk_items_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_items_service` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -12,6 +12,7 @@ use App\Repositories\CustomerPackageRepository;
 use App\Repositories\CustomerRepository;
 use App\Repositories\PackageRepository;
 use App\Services\ActivityService;
+use App\Services\CustomerPackageService;
 use App\Services\CustomerService;
 
 final class CustomerController extends Controller
@@ -79,7 +80,21 @@ final class CustomerController extends Controller
             'notes'   => 'nullable',
             'status'  => 'in:active,inactive',
         ]);
+
+        // Optional package purchase (sold_by required whenever a package is sold)
+        $packageName = trim((string) $this->request->input('package_name', ''));
+        $packagePrice = (float) $this->request->input('package_price', 0);
+        $packageCredits = (int) $this->request->input('package_credits', 0);
+        $packageSoldBy = (int) $this->request->input('package_sold_by', 0);
+        $wantsPackage = $packageName !== '' || $packagePrice > 0 || $packageCredits > 0;
+        if ($wantsPackage && $packageSoldBy <= 0) {
+            $errors['package_sold_by'] = 'Select the staff member who sold this package.';
+        }
+
         if ($errors) {
+            if ($this->request->isAjax()) {
+                $this->json(['success' => false, 'errors' => $errors], 422);
+            }
             $this->session->setErrors($errors);
             $this->session->setOld($data);
             $this->flash('danger', 'Please fix the highlighted fields and try again.');
@@ -90,6 +105,29 @@ final class CustomerController extends Controller
         unset($data['phone']);
 
         $id = $this->service->create($data);
+
+        if ($wantsPackage) {
+            $branch = \App\Core\Session::branch();
+            $packageData = [
+                'name'            => $packageName,
+                'price'           => $packagePrice,
+                'credits'         => $packageCredits,
+                'validity_days'   => (string) $this->request->input('package_validity_days', '') !== ''
+                    ? (int) $this->request->input('package_validity_days')
+                    : null,
+                'notes'           => (string) $this->request->input('package_notes', ''),
+                'sold_by'         => $packageSoldBy,
+                'starts_on'       => (string) $this->request->input('package_purchase_date', ''),
+                'branch_address'  => $branch['address'] ?? null,
+            ];
+            (new CustomerPackageService(
+                new CustomerPackageRepository(),
+                new PackageRepository(),
+                new \App\Models\CustomerPackage(),
+                new \App\Models\CustomerPackageTransaction(),
+                new ActivityService(new ActivityLogRepository())
+            ))->assign((int)$id, null, $packageData);
+        }
 
         if ($this->request->isAjax()) {
             $customer = $this->repo->find((int)$id);
@@ -157,6 +195,7 @@ final class CustomerController extends Controller
             'activePackages' => array_values(array_filter($packages, static fn ($p) => ($p['status'] ?? '') === 'active')),
             'invoices'       => $billingHistory['items'] ?? [],
             'templates'      => (new PackageRepository())->active(),
+            'employees'      => (new \App\Repositories\EmployeeRepository())->active(),
             'billingHistory' => $billingHistory,
             'ledger'         => $ledger['items'] ?? [],
             'recentServices' => $recentServices,

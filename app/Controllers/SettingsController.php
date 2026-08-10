@@ -38,6 +38,7 @@ final class SettingsController extends Controller
             'users'         => $this->service->users(),
             'roles'         => $this->service->roles(),
             'permissions'   => SettingsService::PERMISSION_GROUPS,
+            'branches'      => $this->service->branches(),
         ]);
     }
 
@@ -79,6 +80,7 @@ final class SettingsController extends Controller
                         'email'     => 'required|email|max:190|unique:users,email',
                         'phone'     => 'nullable|phone|max:20',
                         'role_id'   => 'required|integer|exists:roles,id',
+                        'branch_id' => 'nullable|integer|exists:branches,id',
                         'password'  => 'required|min:8',
                     ]);
                     $this->service->createUser($data);
@@ -93,6 +95,7 @@ final class SettingsController extends Controller
                         'email'     => 'required|email|max:190|unique:users,email,' . $id,
                         'phone'     => 'nullable|phone|max:20',
                         'role_id'   => 'required|integer|exists:roles,id',
+                        'branch_id' => 'nullable|integer|exists:branches,id',
                         'password'  => 'nullable|min:8',
                     ]);
                     unset($data['password']);
@@ -117,6 +120,38 @@ final class SettingsController extends Controller
                     $this->service->updateRolePermissions($roleId, is_array($permissions) ? $permissions : []);
                     $this->flash('success', 'Role permissions updated.');
                     $this->redirect('/settings?tab=roles');
+                    break;
+
+                case 'branch_create':
+                    $data = $this->validateRequest([
+                        'name'    => 'required|max:160|unique:branches,name',
+                        'address' => 'nullable|max:255',
+                        'phone'   => 'nullable|max:20',
+                        'status'  => 'nullable|in:active,inactive',
+                    ]);
+                    $this->service->createBranch($data);
+                    $this->flash('success', 'Branch created.');
+                    $this->redirect('/settings?tab=branches');
+                    break;
+
+                case 'branch_update':
+                    $id = (int)$this->request->post('id', 0);
+                    $data = $this->validateRequest([
+                        'name'    => 'required|max:160|unique:branches,name,' . $id,
+                        'address' => 'nullable|max:255',
+                        'phone'   => 'nullable|max:20',
+                        'status'  => 'nullable|in:active,inactive',
+                    ]);
+                    $this->service->updateBranch($id, $data);
+                    $this->flash('success', 'Branch updated.');
+                    $this->redirect('/settings?tab=branches');
+                    break;
+
+                case 'branch_delete':
+                    $id = (int)$this->request->post('id', 0);
+                    $this->service->deleteBranch($id);
+                    $this->flash('success', 'Branch deleted.');
+                    $this->redirect('/settings?tab=branches');
                     break;
 
                 case 'backup':

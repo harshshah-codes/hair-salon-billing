@@ -58,13 +58,16 @@ final class CustomerPackageService
             }
         }
 
-        $startsOn = date('Y-m-d');
-        $expiresOn = $validityDays ? date('Y-m-d', strtotime("+{$validityDays} days")) : null;
+        $startsOn = !empty($custom['starts_on']) && $custom['starts_on'] !== '0000-00-00'
+            ? (string)$custom['starts_on']
+            : date('Y-m-d');
+        $expiresOn = $validityDays ? date('Y-m-d', strtotime($startsOn . " +{$validityDays} days")) : null;
         $valuePerCredit = $credits > 0 ? round($price / $credits, 2) : 0.00;
 
         $id = $this->packageModel->create([
             'customer_id'        => $customerId,
             'package_id'         => $packageId,
+            'sold_by'            => !empty($custom['sold_by']) ? (int)$custom['sold_by'] : null,
             'name'               => $name,
             'selling_price'      => $price,
             'credits'            => $credits,
@@ -75,6 +78,7 @@ final class CustomerPackageService
             'expires_on'         => $expiresOn,
             'status'             => 'active',
             'notes'              => $custom['notes'] ?? null,
+            'branch_address'     => $custom['branch_address'] ?? null,
         ]);
 
         $this->transactionModel->create([

@@ -1,8 +1,7 @@
 <?php /** @var string $title */ ?>
 <div class="text-center mb-4">
-    <div class="display-5 mb-2"><i class="fa-solid fa-lock text-success"></i></div>
-    <h4 class="fw-bold">Welcome back</h4>
-    <p class="text-muted small">Sign in to continue to your dashboard</p>
+    <h2 class="auth-welcome-title">Welcome back</h2>
+    <p class="text-muted small mb-0">Sign in to continue to your dashboard</p>
 </div>
 
 <form method="post" action="<?php echo url('/auth/login'); ?>" autocomplete="off">
@@ -19,6 +18,18 @@
         <div class="input-group input-group-lg">
             <span class="input-group-text"><i class="fa-solid fa-key"></i></span>
             <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Branch</label>
+        <div class="input-group input-group-lg">
+            <span class="input-group-text"><i class="fa-solid fa-store"></i></span>
+            <select name="branch_id" class="form-select" required>
+                <option value="">Select branch…</option>
+                <?php foreach ($branches as $branch): ?>
+                    <option value="<?php echo (int) $branch['id']; ?>"><?php echo e($branch['name']); ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
     </div>
     <button type="submit" class="btn btn-primary btn-lg w-100 mt-2">

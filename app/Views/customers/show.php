@@ -108,10 +108,17 @@
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
                                             <div class="fw-bold"><?php echo e($pkg['name']); ?></div>
-                                            <small class="text-muted">Purchased <?php echo format_date($pkg['starts_on']); ?> · ₹<?php echo number_format((float) $pkg['selling_price'], 2); ?></small>
+                                            <?php if (str_contains(strtolower($pkg['name']), 'top-up')): ?>
+                                                <small class="text-muted"><i class="fa-solid fa-user-check me-1"></i>Sold by <?php echo e($pkg['sold_by_name'] ?? '—'); ?> · ₹<?php echo number_format((float) $pkg['selling_price'], 2); ?></small>
+                                            <?php else: ?>
+                                                <small class="text-muted">Purchased <?php echo format_date($pkg['starts_on']); ?> · ₹<?php echo number_format((float) $pkg['selling_price'], 2); ?></small>
+                                            <?php endif; ?>
                                         </div>
                                         <span class="status-pill status-active">Active</span>
                                     </div>
+                                    <?php if (!empty($pkg['sold_by_name']) && !str_contains(strtolower($pkg['name']), 'top-up')): ?>
+                                        <div class="small text-muted mb-1"><i class="fa-solid fa-user-check me-1"></i>Sold by <?php echo e($pkg['sold_by_name']); ?></div>
+                                    <?php endif; ?>
                                     <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
                                         <small class="text-muted"><?php echo (float) $pkg['remaining_credits']; ?> / <?php echo (int) $pkg['credits']; ?> credits left</small>
                                         <small class="fw-semibold text-success"><?php echo money((float) $pkg['balance_value']); ?></small>
@@ -181,6 +188,9 @@
                                         <span>Start: <?php echo format_date($pkg['starts_on']); ?></span>
                                         <span>Expiry: <?php echo $pkg['expires_on'] ? format_date($pkg['expires_on']) : '—'; ?></span>
                                     </div>
+                                    <?php if (!empty($pkg['sold_by_name'])): ?>
+                                        <div class="small text-muted mt-1"><i class="fa-solid fa-user-check me-1"></i>Sold by <?php echo e($pkg['sold_by_name']); ?></div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -319,6 +329,16 @@
                             <div class="col-md-6"><label class="form-label">Validity (days)</label>
                                 <input class="form-control" name="validity_days" type="number" min="1" value="30"></div>
                         </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Sold By <span class="text-muted small">(staff who sold this package)</span></label>
+                        <select class="form-select" name="sold_by" id="soldBySelect" required>
+                            <option value="">Select staff…</option>
+                            <?php foreach ($employees as $emp): ?>
+                                <option value="<?php echo (int) $emp['id']; ?>"><?php echo e($emp['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <div class="mt-3">

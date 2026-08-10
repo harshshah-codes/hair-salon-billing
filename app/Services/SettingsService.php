@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Core\App;
+use App\Core\Session;
+use App\Repositories\BranchRepository;
 use App\Repositories\SettingsRepository;
 use App\Repositories\UserRepository;
 use RuntimeException;
@@ -25,8 +27,10 @@ final class SettingsService
     public function __construct(
         private SettingsRepository $settings,
         private UserRepository $users,
-        private ActivityService $activity
+        private ActivityService $activity,
+        private ?BranchRepository $branches = null
     ) {
+        $this->branches = $this->branches ?? new BranchRepository();
     }
 
     public function all(): array
@@ -141,6 +145,55 @@ final class SettingsService
     {
         $this->users->updateRolePermissions($roleId, $permissions);
         $this->activity->log('role.permissions_updated', 'role', $roleId);
+    }
+
+    /* ---------------------------------------------------------
+     * Branches
+     * ------------------------------------------------------- */
+
+    public function branches(): array
+    {
+        return $this->branches->all('name ASC');
+    }
+
+    public function createBranch(array $data): int
+    {
+        $id = $this->branches->create([
+            'name'    => trim((string) $data['name']),
+            'address' => trim((string) ($data['address'] ?? '')) ?: null,
+            'phone'   => trim((string) ($data['phone'] ?? '')) ?: null,
+            'status'  => (($data['status'] ?? 'active') === 'inactive') ? 'inactive' : 'active',
+        ]);
+        $this->activity->log('branch.created', 'branch', $id, ['name' => $data['name']]);
+        return $id;
+    }
+
+    public function updateBranch(int $id, array $data): void
+    {
+        $branch = $this->branches->find($id);
+        if (!$branch) {
+            throw new RuntimeException('Branch not found.');
+        }
+        $this->branches->update($id, [
+            'name'    => trim((string) $data['name']),
+            'address' => trim((string) ($data['address'] ?? '')) ?: null,
+            'phone'   => trim((string) ($data['phone'] ?? '')) ?: null,
+            'status'  => (($data['status'] ?? 'active') === 'inactive') ? 'inactive' : 'active',
+        ]);
+        $this->activity->log('branch.updated', 'branch', $id, ['name' => $data['name']]);
+    }
+
+    public function deleteBranch(int $id): void
+    {
+        $branch = $this->branches->find($id);
+        if (!$branch) {
+            throw new RuntimeException('Branch not found.');
+        }
+        if ($id === (int) Session::branchId()) {
+            throw new RuntimeException('You cannot delete the branch you are signed into.');
+        }
+        $this->branches->delete($id);
+        $this->activity->log('branch.deleted', 'branch', $id, ['name' => $branch['name']]);
     }
 
     /* ---------------------------------------------------------

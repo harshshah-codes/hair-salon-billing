@@ -42,9 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Password must be at least 6 characters.');
         }
 
-        $role = $pdo->query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")->fetch();
+        $role = $pdo->query("SELECT id FROM roles WHERE slug = 'superadmin' LIMIT 1")->fetch();
         if (!$role) {
-            throw new RuntimeException('Admin role not found. Schema may have failed.');
+            throw new RuntimeException('Superadmin role not found. Schema may have failed.');
         }
 
         $stmt = $pdo->prepare(

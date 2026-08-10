@@ -1,22 +1,71 @@
-# Front controller rewrite for the public document root.
+# ------------------------------------------------------------
+# Nirav Hair Storm - Apache configuration for the public root
+# ------------------------------------------------------------
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Serve existing files / directories directly.
+    # If the app is served from a subdirectory (e.g. /subfolder),
+    # set the base here:  RewriteBase /subfolder
+    RewriteBase /
+
+    # Serve existing files/directories directly (css, js, images, uploads).
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
+
+    # Block direct access to hidden / sensitive files.
+    RewriteRule ^(\.env|\.git|app|config|database|routes|vendor)/ - [F,L]
 
     # Route everything else through the front controller.
     RewriteRule ^ index.php [L]
 </IfModule>
 
-# Never expose the uploads directory index.
+# ------------------------------------------------------------
+# Security hardening
+# ------------------------------------------------------------
+
+# Never list directory contents.
 <IfModule mod_autoindex.c>
     Options -Indexes
 </IfModule>
 
-# Basic hardening.
-<FilesMatch "^\.(env|ht.*|gitignore)$">
+# Block access to dotfiles and backups.
+<FilesMatch "^\.">
     Require all denied
 </FilesMatch>
+<FilesMatch "\.(env|md|log|bak|old|sql|ini|sh|zip)$">
+    Require all denied
+</FilesMatch>
+
+# Prevent PHP execution inside uploads.
+<IfModule mod_rewrite.c>
+    RewriteRule ^uploads/.*\.php$ - [F,L]
+</IfModule>
+
+# ------------------------------------------------------------
+# Compression (enable if mod_deflate is available)
+# ------------------------------------------------------------
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ------------------------------------------------------------
+# Browser caching (enable if mod_expires is available)
+# ------------------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType image/x-icon "access plus 30 days"
+</IfModule>
+
+# ------------------------------------------------------------
+# Charset
+# ------------------------------------------------------------
+AddDefaultCharset UTF-8

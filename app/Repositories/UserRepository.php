@@ -21,8 +21,10 @@ final class UserRepository extends BaseRepository
         }
 
         $stmt = $this->db->prepare(
-            "SELECT u.*, r.name AS role_name, r.slug AS role_slug
-             FROM users u JOIN roles r ON r.id = u.role_id
+            "SELECT u.*, r.name AS role_name, r.slug AS role_slug, b.name AS branch_name
+             FROM users u
+             JOIN roles r ON r.id = u.role_id
+             LEFT JOIN branches b ON b.id = u.branch_id
              WHERE " . implode(' AND ', $where) . " ORDER BY u.created_at DESC"
         );
         $stmt->execute($params);
@@ -41,8 +43,10 @@ final class UserRepository extends BaseRepository
     public function withRole(int $userId): ?array
     {
         $stmt = $this->db->prepare(
-            "SELECT u.*, r.name AS role_name, r.slug AS role_slug
-             FROM users u JOIN roles r ON r.id = u.role_id
+            "SELECT u.*, r.name AS role_name, r.slug AS role_slug, b.name AS branch_name
+             FROM users u
+             JOIN roles r ON r.id = u.role_id
+             LEFT JOIN branches b ON b.id = u.branch_id
              WHERE u.id = ? AND u.deleted_at IS NULL LIMIT 1"
         );
         $stmt->execute([$userId]);
@@ -53,7 +57,7 @@ final class UserRepository extends BaseRepository
     {
         $set  = [];
         $args = [];
-        foreach (['role_id', 'name', 'email', 'phone', 'status', 'password', 'last_login_at'] as $col) {
+        foreach (['role_id', 'branch_id', 'name', 'email', 'phone', 'status', 'password', 'last_login_at'] as $col) {
             if (array_key_exists($col, $data)) {
                 $set[]  = "{$col} = ?";
                 $args[] = $data[$col];
@@ -78,10 +82,11 @@ final class UserRepository extends BaseRepository
     public function createUser(array $data): int
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO users (role_id, name, email, phone, password, status) VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO users (role_id, branch_id, name, email, phone, password, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             (int)$data['role_id'],
+            !empty($data['branch_id']) ? (int)$data['branch_id'] : null,
             $data['name'],
             $data['email'],
             $data['phone'] ?? null,
@@ -95,10 +100,10 @@ final class UserRepository extends BaseRepository
     {
         $set  = [];
         $args = [];
-        foreach (['role_id', 'name', 'email', 'phone', 'status'] as $col) {
+        foreach (['role_id', 'branch_id', 'name', 'email', 'phone', 'status'] as $col) {
             if (array_key_exists($col, $data)) {
                 $set[]  = "{$col} = ?";
-                $args[] = $data[$col];
+                $args[] = $col === 'branch_id' && empty($data[$col]) ? null : $data[$col];
             }
         }
         if (isset($data['password']) && $data['password'] !== '') {

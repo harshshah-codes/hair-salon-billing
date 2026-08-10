@@ -184,27 +184,56 @@ final class ReportRepository extends BaseRepository
     public function customerStatement(int $customerId, string $from, string $to): array
     {
         $stmt = $this->db->prepare(
-            "SELECT cpt.id, cpt.created_at, cpt.type, cpt.amount, cpt.reference_id,
-                    cp.name AS package_name, i.invoice_number,
-                    (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR ', ')
-                     FROM invoice_items ii
-                     WHERE ii.invoice_id = cpt.reference_id) AS services,
-                    (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
-                     FROM employee_allocations ea
-                     JOIN employees e ON e.id = ea.employee_id
-                     WHERE ea.invoice_id = cpt.reference_id) AS employees
-             FROM customer_package_transactions cpt
-             LEFT JOIN customer_packages cp ON cp.id = cpt.customer_package_id
-             LEFT JOIN invoices i ON i.id = cpt.reference_id
-             WHERE cpt.customer_id = ? AND DATE(cpt.created_at) BETWEEN ? AND ?
-             ORDER BY cpt.id ASC"
+            "SELECT *
+             FROM (
+                SELECT cpt.id AS sort_id, cpt.created_at, cpt.type, cpt.amount, cpt.reference_id,
+                       cp.name AS package_name, i.invoice_number,
+                       (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = cpt.reference_id) AS service_date,
+                       (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
+                        FROM invoice_items ii
+                        WHERE ii.invoice_id = cpt.reference_id) AS services,
+                       (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
+                        FROM employee_allocations ea
+                        JOIN employees e ON e.id = ea.employee_id
+                        WHERE ea.invoice_id = cpt.reference_id) AS employees,
+                       COALESCE(
+                           cp.branch_address,
+                           b.name,
+                           ''
+                       ) AS branch
+                 FROM customer_package_transactions cpt
+                 LEFT JOIN customer_packages cp ON cp.id = cpt.customer_package_id
+                 LEFT JOIN invoices i ON i.id = cpt.reference_id
+                 LEFT JOIN branches b ON b.id = i.branch_id
+                 WHERE cpt.customer_id = ? AND DATE(cpt.created_at) BETWEEN ? AND ?
+
+                 UNION ALL
+
+                 SELECT i.id AS sort_id, i.created_at, 'bill' AS type, i.total AS amount, i.id AS reference_id,
+                        NULL AS package_name, i.invoice_number,
+                        (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS service_date,
+                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
+                         FROM invoice_items ii
+                         WHERE ii.invoice_id = i.id) AS services,
+                        (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
+                         FROM employee_allocations ea
+                         JOIN employees e ON e.id = ea.employee_id
+                         WHERE ea.invoice_id = i.id) AS employees,
+                        COALESCE(b.name, '') AS branch
+                 FROM invoices i
+                 LEFT JOIN branches b ON b.id = i.branch_id
+                 WHERE i.customer_id = ? AND i.status IN ('paid','issued','partially_paid')
+                   AND NOT EXISTS (SELECT 1 FROM customer_package_transactions c WHERE c.reference_id = i.id)
+                   AND DATE(i.created_at) BETWEEN ? AND ?
+             ) stmt_rows
+             ORDER BY created_at ASC, sort_id ASC"
         );
-        $stmt->execute([$customerId, $from, $to]);
+        $stmt->execute([$customerId, $from, $to, $customerId, $from, $to]);
 
         $rows = $stmt->fetchAll();
         $running = 0.0;
         foreach ($rows as &$row) {
-            // Credit-ish types add money to the wallet; debits take it out.
+            // Credit-ish types add money to the wallet; bills/debits take it out.
             $isCredit = in_array($row['type'], ['purchase', 'credit'], true);
             $amount = round((float) $row['amount'], 2);
             $row['is_credit'] = $isCredit;

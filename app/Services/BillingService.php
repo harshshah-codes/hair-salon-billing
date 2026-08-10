@@ -75,6 +75,19 @@ final class BillingService
     }
 
     /**
+     * Validate/normalize a Y-m-d date for a line item (used for backdated entries).
+     */
+    private function normalizeDate($date): ?string
+    {
+        $date = trim((string)($date ?? ''));
+        if ($date === '') {
+            return null;
+        }
+        $d = \DateTime::createFromFormat('Y-m-d', $date);
+        return $d ? $d->format('Y-m-d') : null;
+    }
+
+    /**
      * Build a full invoice calculation from raw payload.
      * Shared by save() and the client-side preview endpoint.
      */
@@ -95,6 +108,7 @@ final class BillingService
                 'price'         => $price,
                 'qty'           => $qty,
                 'total'         => $total,
+                'date'          => $this->normalizeDate($item['date'] ?? null),
                 'allocations'   => $item['allocations'] ?? [],
             ];
         }
@@ -205,46 +219,6 @@ final class BillingService
     }
 
     /**
-     * Create a lifetime wallet top-up package for a customer.
-     * Credits map 1:1 to rupees (value_per_credit = 1.00), so the balance
-     * value equals the amount paid. No expiry.
-     */
-    public function createTopUpPackage(int $customerId, float $amount, string $name = 'Wallet Top-up'): int
-    {
-        $credits = max(1, (int) round($amount));
-        $id = (int) $this->packageModel->create([
-            'customer_id'        => $customerId,
-            'package_id'         => null,
-            'name'               => $name,
-            'selling_price'      => $amount,
-            'credits'            => $credits,
-            'remaining_credits'  => $credits,
-            'value_per_credit'   => 1.00,
-            'validity_days'      => null,
-            'starts_on'          => date('Y-m-d'),
-            'expires_on'         => null,
-            'status'             => 'active',
-            'notes'              => 'Wallet top-up (lifetime)',
-        ]);
-
-        $this->packageTransactionModel->create([
-            'customer_package_id' => $id,
-            'customer_id'         => $customerId,
-            'type'                => 'purchase',
-            'credits'             => $credits,
-            'amount'              => $amount,
-            'description'         => $name,
-        ]);
-
-        $this->activity->log('package.topup', 'customer_package', $id, [
-            'customer_id' => $customerId,
-            'amount'      => $amount,
-        ]);
-
-        return $id;
-    }
-
-    /**
      * Persist an invoice. $payload matches the billing POS form.
      *
      * @param array $payload
@@ -257,26 +231,16 @@ final class BillingService
             throw new RuntimeException('A customer is required to create a bill.');
         }
 
-        // Allow the POS to attach a wallet top-up in the same request so the
-        // bill never has to be blocked. The top-up is a lifetime custom package.
+        // Allow the ledger balance to go negative: bills may exceed the wallet.
         $topUp = (float)($payload['top_up'] ?? 0);
         if ($topUp > 0) {
-            $this->createTopUpPackage($customerId, $topUp, (string)($payload['top_up_name'] ?? 'Wallet Top-up'));
+            throw new RuntimeException('Wallet top-ups are no longer supported.');
         }
 
         $calculation = $this->compute($payload);
 
         if (empty($calculation['items'])) {
             throw new RuntimeException('Add at least one service to the bill.');
-        }
-
-        // No negative balances: the wallet must cover the full bill. The POS
-        // attaches a top-up package to satisfy this before submitting.
-        if ($mode === 'final' && $calculation['due_amount'] > 0.001) {
-            throw new RuntimeException(sprintf(
-                'Insufficient wallet balance. Add a top-up of ₹%s to continue.',
-                number_format($calculation['shortfall'], 2)
-            ));
         }
 
         // Allocation validation (server side)
@@ -298,11 +262,7 @@ final class BillingService
         ) {
             $status = 'draft';
             if ($mode === 'final') {
-                $status = match (true) {
-                    $calculation['due_amount'] <= 0.001 => 'paid',
-                    $calculation['amount_paid'] > 0     => 'partially_paid',
-                    default                             => 'issued',
-                };
+                $status = 'paid';
             }
 
             $invoiceId = $this->invoiceModel->create([
@@ -321,6 +281,7 @@ final class BillingService
                 'status'         => $status,
                 'invoice_date'   => date('Y-m-d'),
                 'due_date'       => null,
+                'branch_id'      => \App\Core\Session::branchId(),
                 'created_by'     => auth_id(),
             ]);
 
@@ -333,6 +294,7 @@ final class BillingService
                     'price'        => $item['price'],
                     'qty'          => $item['qty'],
                     'amount'       => $item['total'],
+                    'service_date' => $item['date'] ?? null,
                 ]);
 
                 foreach ($item['allocations'] as $alloc) {

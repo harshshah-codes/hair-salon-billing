@@ -76,9 +76,10 @@ final class InvoiceRepository extends BaseRepository
     public function packageTransactions(int $invoiceId): array
     {
         $stmt = $this->db->prepare(
-            "SELECT cpt.*, cp.name AS package_name
+            "SELECT cpt.*, cp.name AS package_name, e.name AS sold_by_name
              FROM customer_package_transactions cpt
              JOIN customer_packages cp ON cp.id = cpt.customer_package_id
+             LEFT JOIN employees e ON e.id = cp.sold_by
              WHERE cpt.reference_id = ?"
         );
         $stmt->execute([$invoiceId]);
@@ -129,6 +130,6 @@ final class InvoiceRepository extends BaseRepository
             $lastNum = (int)end($parts);
             $n = $lastNum + 1;
         }
-        return $prefix . str_pad((string)$n, 5, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string)$n, 3, '0', STR_PAD_LEFT);
     }
 }

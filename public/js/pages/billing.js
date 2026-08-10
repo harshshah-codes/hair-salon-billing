@@ -128,27 +128,41 @@
         }
         const uid = nextUid();
         const tr = $('<tr>', { class: 'bill-item-row', 'data-uid': uid })
+            .append($('<td>').append($('<input>', { class: 'form-control form-control-sm date-input', type: 'date', value: todayStr() })))
             .append($('<td>').append($('<input>', { class: 'form-control form-control-sm name-input', type: 'text', placeholder: 'Service name (e.g. Haircut)' })))
-            .append($('<td>').append($('<div>', { class: 'input-group input-group-sm' }).append($('<span>', { class: 'input-group-text' }).text('₹')).append($('<input>', { class: 'form-control text-end price-input', type: 'number', step: '0.01', min: '0', value: '' }))))
-            .append($('<td>').append($('<input>', { class: 'form-control form-control-sm text-center qty-input', type: 'number', min: '1', value: '1' })))
             .append($('<td>').append(
                 $('<select>', { class: 'form-select form-select-sm emp-select', multiple: true }).html(renderEmpOptions()),
                 $('<button>', { type: 'button', class: 'btn btn-sm btn-soft alloc-btn mt-2 w-100', disabled: true }).text('Allocate')
             ))
+            .append($('<td>').append($('<div>', { class: 'input-group input-group-sm' }).append($('<span>', { class: 'input-group-text' }).text('₹')).append($('<input>', { class: 'form-control text-end price-input', type: 'number', step: '0.01', min: '0', value: '' }))))
+            .append($('<td>').append($('<input>', { class: 'form-control form-control-sm text-center qty-input', type: 'number', min: '1', value: '1' })))
             .append($('<td>').append($('<button>', { type: 'button', class: 'btn btn-sm btn-icon text-danger remove-row' }).append($('<i>', { class: 'fa-solid fa-trash' }))));
 
         $('#billingItemsBody').append(tr);
 
         tr.find('.emp-select').select2({ dropdownParent: tr, width: '100%', placeholder: 'Assign employees…', closeOnSelect: false });
 
-        state.items.push({ uid: uid, name: '', price: 0, qty: 1, employees: [] });
+        state.items.push({ uid: uid, name: '', price: 0, qty: 1, date: todayStr(), employees: [] });
         recalc();
+    }
+
+    function todayStr() {
+        const d = new Date();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + m + '-' + day;
     }
 
     $(document).on('input', '.name-input', function () {
         const tr = $(this).closest('tr');
         const item = state.items.find((i) => i.uid === tr.data('uid'));
         if (item) { item.name = $(this).val().trim(); }
+    });
+
+    $(document).on('change', '.date-input', function () {
+        const tr = $(this).closest('tr');
+        const item = state.items.find((i) => i.uid === tr.data('uid'));
+        if (item) { item.date = $(this).val() || todayStr(); }
     });
 
     $(document).on('input change', '.price-input', function () {
@@ -262,20 +276,19 @@
     });
 
     /* ---------- Submit ---------- */
-    function buildPayload(flags) {
-        flags = flags || {};
+    function buildPayload() {
         const data = {
             _token: $('meta[name="csrf-token"]').attr('content'),
             customer_id: state.customer ? state.customer.id : '',
             package_used: state.customer ? calc() : 0,
             notes: state.notes,
-            draft: flags.draft ? 1 : 0
+            draft: 0
         };
-        if (flags.top_up) { data.top_up = flags.top_up; }
         state.items.forEach((item, idx) => {
             data['items_name[' + idx + ']'] = item.name;
             data['items_price[' + idx + ']'] = item.price;
             data['items_qty[' + idx + ']'] = item.qty;
+            data['items_date[' + idx + ']'] = item.date || todayStr();
             item.employees.forEach((emp, j) => {
                 data['alloc_employee[' + idx + '][' + j + ']'] = emp.id;
                 data['alloc_amount[' + idx + '][' + j + ']'] = emp.amount;
@@ -284,7 +297,7 @@
         return data;
     }
 
-    function submitBill(draft) {
+    function submitBill() {
         if (!state.customer) {
             Swal.fire({ icon: 'warning', title: 'No customer selected', text: 'Search and select a customer first.' });
             return;
@@ -301,56 +314,28 @@
             }
         }
 
-        const total = calc();
-        const balance = walletBalance();
-
-        if (!draft && total > balance) {
-            showTopUpModal(total, balance);
-            return;
-        }
-
-        createTransaction(draft);
+        createTransaction();
     }
 
-    function showTopUpModal(total, balance) {
-        const shortfall = total - balance;
-        $('#exceedTotal').text(money(total));
-        $('#exceedBalance').text(money(balance));
-        $('#exceedShortfall').text(money(shortfall));
-        $('#topUpAmount').val(shortfall.toFixed(2));
-        $('#exceedModal').modal('show');
-    }
-
-    $('#btnTopUpAndCreate').on('click', function () {
-        const val = parseFloat($('#topUpAmount').val()) || 0;
-        const shortfall = (calc() - walletBalance());
-        if (val < 0.01 || val < shortfall - 0.01) {
-            Swal.fire({ icon: 'warning', title: 'Top-up too small', text: 'The top-up must cover the shortfall of ' + money(shortfall) + '.' });
-            return;
-        }
-        $('#exceedModal').modal('hide');
-        createTransaction(false, val);
-    });
-
-    function createTransaction(draft, topUp) {
+    function createTransaction() {
         Swal.fire({
-            title: draft ? 'Save as draft?' : 'Create transaction?',
-            text: topUp ? 'A lifetime wallet top-up of ' + money(topUp) + ' will be added and applied to this transaction.' : 'The wallet will be charged for this transaction.',
+            title: 'Create transaction?',
+            text: 'The wallet will be charged for this transaction.',
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: draft ? 'Save Draft' : 'Create Transaction',
+            confirmButtonText: 'Create Transaction',
             confirmButtonColor: '#10b981',
             cancelButtonText: 'Cancel',
             reverseButtons: true
         }).then((result) => {
             if (!result.isConfirmed) return;
-            const btn = draft ? '#btnSaveDraft' : '#btnGenerateInvoice';
+            const btn = '#btnGenerateInvoice';
             $(btn).prop('disabled', true);
 
             $.ajax({
                 url: '/billing/store',
                 method: 'POST',
-                data: buildPayload(overrunFlag(draft, topUp)),
+                data: buildPayload(),
                 dataType: 'json'
             }).done((res) => {
                 if (res.success) {
@@ -370,14 +355,7 @@
         });
     }
 
-    function overrunFlag(draft, topUp) {
-        const data = { draft: draft };
-        if (topUp) { data.top_up = topUp; }
-        return data;
-    }
-
-    $('#btnGenerateInvoice').on('click', () => submitBill(false));
-    $('#btnSaveDraft').on('click', () => submitBill(true));
+    $('#btnGenerateInvoice').on('click', () => submitBill());
     $('#btnCancelBill').on('click', () => {
         Swal.fire({
             title: 'Cancel transaction?', icon: 'warning', showCancelButton: true,
@@ -389,69 +367,15 @@
 
     /* ---------- Create customer from search ---------- */
     function openCreateCustomerModal() {
-        $('#createCustomerForm input:not([type=hidden])').removeClass('is-invalid').val('');
-        $('#createCustomerModal .invalid-feedback').addClass('d-none').html('');
-        $('#createCustomerModal').modal('show');
-        setTimeout(() => $('#ccName').focus(), 300);
+        const q = $input.val().trim();
+        CreateCustomerModal.open({ phone: /^\d+$/.test(q) ? q : '', name: '' });
     }
-
-    $('#btnCreateCustomer').on('click', function () {
-        const form = $('#createCustomerForm')[0];
-        if (!form.name.value.trim()) {
-            $('#ccName').addClass('is-invalid');
-            return;
-        }
-        const btn = $(this).prop('disabled', true);
-        $.ajax({
-            url: '/customers',
-            method: 'POST',
-            data: new FormData(form),
-            processData: false,
-            contentType: false,
-            dataType: 'json'
-        }).done((res) => {
-            if (res.success) {
-                $('#createCustomerModal').modal('hide');
-                Swal.fire({ icon: 'success', title: 'Customer created', timer: 1200, showConfirmButton: false });
-                selectCustomer(res.customer);
-            } else {
-                showCcErrors(res.errors);
-                btn.prop('disabled', false);
-            }
-        }).fail((xhr) => {
-            const res = xhr.responseJSON || {};
-            if (res.errors) showCcErrors(res.errors);
-            else Swal.fire({ icon: 'error', title: res.message || 'Could not create customer.' });
-            btn.prop('disabled', false);
-        });
-    });
-
-    function showCcErrors(errors) {
-        $('#createCustomerModal input').removeClass('is-invalid');
-        $('#createCustomerModal .invalid-feedback').addClass('d-none').html('');
-        if (!errors) return;
-        for (const key in errors) {
-            const input = $('#createCustomerModal [name="' + key + '"]');
-            if (input.length) {
-                input.addClass('is-invalid');
-                const fb = input.closest('.mb-3').find('.invalid-feedback').length ? input.closest('.mb-3').find('.invalid-feedback') : input.siblings('.invalid-feedback');
-                fb.removeClass('d-none').html(Array.isArray(errors[key]) ? errors[key].join(' ') : errors[key]);
-            }
-        }
-    }
-
-    $('input', $('#createCustomerForm')).on('input', function () {
-        $(this).removeClass('is-invalid');
-    });
-    $('#createCustomerModal').on('keydown', function (e) {
-        if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
-            $('#btnCreateCustomer').trigger('click');
-        }
-    });
 
     /* ---------- Init ---------- */
     window.NHS.init = function () {
+        CreateCustomerModal.onCreated(function (customer) {
+            selectCustomer(customer);
+        });
         addItemRow();
         if (BILLING.preselectCustomerId) {
             $.getJSON('/billing/customer/' + BILLING.preselectCustomerId)

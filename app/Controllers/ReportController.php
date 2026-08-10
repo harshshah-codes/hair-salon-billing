@@ -27,7 +27,7 @@ final class ReportController extends Controller
     public function index(): void
     {
         $type = (string)$this->request->query('type', 'revenue');
-        $from = (string)$this->request->query('from', date('Y-m-01'));
+        $from = (string)$this->request->query('from', $type === 'statements' ? '2015-01-01' : date('Y-m-01'));
         $to   = (string)$this->request->query('to', date('Y-m-d'));
 
         $filters = [
@@ -113,23 +113,24 @@ final class ReportController extends Controller
                 }
                 break;
             case 'statements':
-                $rows = [['Date', 'Type', 'Description', 'Services', 'By', 'Amount', 'Balance']];
+                $rows = [['Date', 'Service / Package', 'Stylist', 'Branch', 'Amount', 'Balance']];
                 foreach ($data['rows'] as $row) {
                     $balance = (float) ($row['wallet_balance'] ?? 0);
                     $amount  = (float) $row['amount'];
                     $isCredit = !empty($row['is_credit']);
-                    $desc = $row['package_name'] ?? ($row['invoice_number'] ?? '');
-                    if ($row['type'] === 'debit') {
-                        $desc = ($row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? ''));
-                    } elseif (!empty($row['services'])) {
-                        $desc = trim($row['services']) . ' — ' . $desc;
+                    if (in_array($row['type'], ['debit', 'bill'], true)) {
+                        $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
+                    } else {
+                        $service = $row['package_name'] ?? ($row['invoice_number'] ?: 'Package purchase');
+                        if (!empty($row['services'])) {
+                            $service = trim($row['services']) . ' — ' . $service;
+                        }
                     }
                     $rows[] = [
-                        $row['created_at'],
-                        $row['type'],
-                        $desc,
-                        $row['services'] ?? '',
+                        $row['service_date'] ?? $row['created_at'],
+                        $service,
                         $row['employees'] ?? '',
+                        $row['branch'] ?? '',
                         ($isCredit ? '+' : '-') . number_format(abs($amount), 2),
                         ($balance > 0 ? '+' : ($balance < 0 ? '-' : '')) . number_format(abs($balance), 2),
                     ];

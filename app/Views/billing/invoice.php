@@ -199,7 +199,7 @@ $status = $invoice['status'] ?? 'issued';
     <div class="card-header"><h5 class="mb-0">Package Transactions</h5></div>
     <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Date</th><th>Package</th><th>Type</th><th class="text-end">Credits</th><th class="text-end">Amount</th><th>Description</th></tr></thead>
+            <thead><tr><th>Date</th><th>Package</th><th>Type</th><th class="text-end">Credits</th><th class="text-end">Amount</th><th>Sold By</th><th>Description</th></tr></thead>
             <tbody>
             <?php foreach ($packageTransactions as $t): ?>
                 <tr>
@@ -208,6 +208,7 @@ $status = $invoice['status'] ?? 'issued';
                     <td><span class="badge bg-secondary-soft"><?= e(ucfirst($t['type'])) ?></span></td>
                     <td class="text-end"><?= e(number_format((float)$t['credits'], 2)) ?></td>
                     <td class="text-end"><?= e(money($t['amount'])) ?></td>
+                    <td><?= e($t['sold_by_name'] ?? '—') ?></td>
                     <td class="text-muted"><?= e($t['description'] ?? '—') ?></td>
                 </tr>
             <?php endforeach; ?>

@@ -8,6 +8,7 @@ $tabs = [
     'business'    => 'Business',
     'invoice'     => 'Invoice',
     'preferences' => 'Preferences',
+    'branches'    => 'Branches',
     'users'       => 'Users & Access',
     'roles'       => 'Roles',
 ];
@@ -141,6 +142,112 @@ $currentTheme = setting('theme_mode', 'light');
             </div>
         </div>
     </div>
+<?php elseif ($current === 'branches'): ?>
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Branches</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Name</th><th>Address</th><th>Phone</th><th>Employees</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                <tbody>
+                <?php foreach ($branches as $branch): ?>
+                    <tr>
+                        <td class="fw-semibold"><?= e($branch['name']) ?></td>
+                        <td class="text-muted"><?= e($branch['address'] ?? '—') ?></td>
+                        <td><?= e($branch['phone'] ?? '—') ?></td>
+                        <td><?= (int) ($branch['employee_count'] ?? 0) ?></td>
+                        <td><span class="status-pill status-<?= e($branch['status']) ?>"><?= e(ucfirst($branch['status'])) ?></span></td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#branchModal"
+                                    data-id="<?= (int)$branch['id'] ?>"
+                                    data-name="<?= e($branch['name']) ?>"
+                                    data-address="<?= e($branch['address'] ?? '') ?>"
+                                    data-phone="<?= e($branch['phone'] ?? '') ?>"
+                                    data-status="<?= e($branch['status']) ?>"><i class="fa-solid fa-pen"></i></button>
+                            <form method="post" action="<?= e(url('/settings')) ?>" class="d-inline" data-confirm data-confirm-message="Delete branch <?= e($branch['name']) ?>?">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="section" value="branch_delete">
+                                <input type="hidden" name="id" value="<?= (int)$branch['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header"><h5 class="mb-0">Add New Branch</h5></div>
+        <div class="card-body">
+            <form method="post" action="<?= e(url('/settings')) ?>" class="row g-3">
+                <?= csrf_field() ?>
+                <input type="hidden" name="section" value="branch_create">
+                <div class="col-md-4">
+                    <label class="form-label">Name</label>
+                    <input type="text" name="name" class="form-control" placeholder="e.g. Main Outlet" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Phone</label>
+                    <input type="text" name="phone" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Address</label>
+                    <input type="text" name="address" class="form-control">
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-plus me-1"></i>Create Branch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="branchModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="post" action="<?= e(url('/settings')) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="section" value="branch_update">
+                    <input type="hidden" name="id" value="">
+                    <div class="modal-header"><h5 class="modal-title">Edit Branch</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <input type="text" name="name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="phone" class="form-control">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Address</label>
+                            <input type="text" name="address" class="form-control">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 <?php elseif ($current === 'users'): ?>
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -148,7 +255,7 @@ $currentTheme = setting('theme_mode', 'light');
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th>Last Login</th><th class="text-end">Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Branch</th><th>Status</th><th>Last Login</th><th class="text-end">Actions</th></tr></thead>
                 <tbody>
                 <?php foreach ($users as $user): ?>
                     <tr>
@@ -156,6 +263,7 @@ $currentTheme = setting('theme_mode', 'light');
                         <td><?= e($user['email']) ?></td>
                         <td><?= e($user['phone'] ?? '—') ?></td>
                         <td><span class="badge bg-primary-soft"><?= e($user['role_name']) ?></span></td>
+                        <td class="text-muted"><?= e($user['branch_name'] ?? '—') ?></td>
                         <td><span class="status-pill status-<?= e($user['status']) ?>"><?= e(ucfirst($user['status'])) ?></span></td>
                         <td class="text-muted"><?= e($user['last_login_at'] ? format_datetime($user['last_login_at']) : 'Never') ?></td>
                         <td class="text-end">
@@ -164,7 +272,8 @@ $currentTheme = setting('theme_mode', 'light');
                                     data-name="<?= e($user['name']) ?>"
                                     data-email="<?= e($user['email']) ?>"
                                     data-phone="<?= e($user['phone'] ?? '') ?>"
-                                    data-role="<?= (int)$user['role_id'] ?>"><i class="fa-solid fa-pen"></i></button>
+                                    data-role="<?= (int)$user['role_id'] ?>"
+                                    data-branch="<?= (int)($user['branch_id'] ?? 0) ?>"><i class="fa-solid fa-pen"></i></button>
                             <form method="post" action="<?= e(url('/settings')) ?>" class="d-inline" data-confirm data-confirm-message="Delete user <?= e($user['name']) ?>?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="section" value="user_delete">
@@ -202,6 +311,15 @@ $currentTheme = setting('theme_mode', 'light');
                     <select name="role_id" class="form-select" required>
                         <?php foreach ($roles as $role): ?>
                             <option value="<?= (int)$role['id'] ?>"><?= e($role['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Branch</label>
+                    <select name="branch_id" class="form-select">
+                        <option value="">— All / None —</option>
+                        <?php foreach ($branches as $branch): ?>
+                            <option value="<?= (int)$branch['id'] ?>"><?= e($branch['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -249,6 +367,15 @@ $currentTheme = setting('theme_mode', 'light');
                             <select name="role_id" class="form-select" required>
                                 <?php foreach ($roles as $role): ?>
                                     <option value="<?= (int)$role['id'] ?>"><?= e($role['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Branch</label>
+                            <select name="branch_id" class="form-select">
+                                <option value="">— All / None —</option>
+                                <?php foreach ($branches as $branch): ?>
+                                    <option value="<?= (int)$branch['id'] ?>"><?= e($branch['name']) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -373,6 +500,17 @@ $currentTheme = setting('theme_mode', 'light');
             m.find('input[name="email"]').val(b.data('email'));
             m.find('input[name="phone"]').val(b.data('phone'));
             m.find('select[name="role_id"]').val(String(b.data('role')));
+            m.find('select[name="branch_id"]').val(String(b.data('branch') || ''));
+        });
+
+        $('#branchModal').on('show.bs.modal', function (e) {
+            const b = $(e.relatedTarget);
+            const m = $(this);
+            m.find('input[name="id"]').val(b.data('id'));
+            m.find('input[name="name"]').val(b.data('name'));
+            m.find('input[name="phone"]').val(b.data('phone'));
+            m.find('input[name="address"]').val(b.data('address'));
+            m.find('select[name="status"]').val(b.data('status') || 'active');
         });
 
         $('#roleModal').on('show.bs.modal', function (e) {

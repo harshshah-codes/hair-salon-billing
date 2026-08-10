@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Repositories\BranchRepository;
 use App\Repositories\EmployeeRepository;
 
 class EmployeeController extends Controller
@@ -108,7 +109,10 @@ class EmployeeController extends Controller
 
     public function create(): void
     {
-        $this->view->render('employees.partials._form', ['employee' => null], 'plain');
+        $this->view->render('employees.partials._form', [
+            'employee' => null,
+            'branches' => (new BranchRepository())->active(),
+        ], 'plain');
     }
 
     public function edit(int $id): void
@@ -117,7 +121,10 @@ class EmployeeController extends Controller
         if (!$employee) {
             $this->response->abort(404, 'Employee not found');
         }
-        $this->view->render('employees.partials._form', ['employee' => $employee], 'plain');
+        $this->view->render('employees.partials._form', [
+            'employee' => $employee,
+            'branches' => (new BranchRepository())->active(),
+        ], 'plain');
     }
 
     public function store(): void
@@ -126,6 +133,7 @@ class EmployeeController extends Controller
         $repo = new EmployeeRepository();
 
         $data = [
+            'branch_id' => (int) $this->request->input('branch_id', 0),
             'name' => trim((string) $this->request->input('name')),
             'mobile' => trim((string) $this->request->input('mobile')),
             'email' => trim((string) $this->request->input('email')) ?: null,
@@ -136,6 +144,7 @@ class EmployeeController extends Controller
         ];
 
         $errors = $this->validate($data, [
+            'branch_id' => 'required|integer|exists:branches,id',
             'name' => 'required|max:160',
             'mobile' => 'required|max:20|unique:employees,mobile,' . ($id ?: ''),
             'email' => 'nullable|email|max:160',

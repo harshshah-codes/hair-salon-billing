@@ -11,7 +11,7 @@ class Access
 {
     public static function can(string $roleSlug, $permissions, string $permission): bool
     {
-        if ($roleSlug === 'admin') {
+        if ($roleSlug === 'superadmin') {
             return true;
         }
         if (!is_array($permissions)) {

@@ -10,6 +10,6 @@ final class Employee extends Model
 {
     protected string $table = 'employees';
     protected array $fillable = [
-        'name', 'mobile', 'email', 'designation', 'photo', 'commission_rate', 'status', 'joined_at',
+        'branch_id', 'name', 'mobile', 'email', 'designation', 'photo', 'commission_rate', 'status', 'joined_at',
     ];
 }

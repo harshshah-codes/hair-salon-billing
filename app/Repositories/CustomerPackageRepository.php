@@ -25,9 +25,10 @@ final class CustomerPackageRepository extends BaseRepository
     public function forCustomer(int $customerId): array
     {
         $stmt = $this->db->prepare(
-            "SELECT cp.*, p.selling_price AS template_price
+            "SELECT cp.*, p.selling_price AS template_price, e.name AS sold_by_name
              FROM customer_packages cp
              LEFT JOIN packages p ON p.id = cp.package_id
+             LEFT JOIN employees e ON e.id = cp.sold_by
              WHERE cp.customer_id = ?
              ORDER BY cp.created_at DESC"
         );

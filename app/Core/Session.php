@@ -59,8 +59,27 @@ final class Session
 
     public static function logout(): void
     {
-        unset($_SESSION['user']);
+        unset($_SESSION['user'], $_SESSION['branch_id']);
         session_regenerate_id(true);
+    }
+
+    public static function setBranch(int $branchId): void
+    {
+        $_SESSION['branch_id'] = $branchId;
+    }
+
+    public static function branchId(): ?int
+    {
+        return isset($_SESSION['branch_id']) ? (int) $_SESSION['branch_id'] : null;
+    }
+
+    public static function branch(): ?array
+    {
+        $id = self::branchId();
+        if (!$id) {
+            return null;
+        }
+        return (new \App\Repositories\BranchRepository())->find($id);
     }
 
     public static function user(): ?array
