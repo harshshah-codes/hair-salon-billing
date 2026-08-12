@@ -59,11 +59,7 @@ class BillingController extends Controller
 
         $balanceValue = 0.0;
         foreach ($packages as $pkg) {
-            $vpc = (float) ($pkg['value_per_credit'] ?? 0);
-            if ($vpc <= 0 && (float) ($pkg['credits'] ?? 0) > 0) {
-                $vpc = (float) ($pkg['selling_price'] ?? 0) / (float) $pkg['credits'];
-            }
-            $balanceValue += (float) ($pkg['remaining_credits'] ?? 0) * $vpc;
+            $balanceValue += (float) ($pkg['remaining_credits'] ?? 0);
         }
 
         $this->json([

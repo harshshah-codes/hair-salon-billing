@@ -129,11 +129,7 @@ final class BillingService
         $active = $packageCustomerId > 0 ? $this->customerPackages->activeFor($packageCustomerId) : [];
         $availableBalance = 0.0;
         foreach ($active as $row) {
-            $vpc = (float) $row['value_per_credit'];
-            if ($vpc <= 0 && (int) $row['credits'] > 0) {
-                $vpc = (float) $row['selling_price'] / (int) $row['credits'];
-            }
-            $availableBalance += (float) $row['remaining_credits'] * $vpc;
+            $availableBalance += (float) $row['remaining_credits'];
         }
         $availableBalance = round($availableBalance, 2);
 
@@ -152,24 +148,17 @@ final class BillingService
                 if ($remaining <= 0.001) {
                     break;
                 }
-                $vpc = (float) $row['value_per_credit'];
-                if ($vpc <= 0 && (int) $row['credits'] > 0) {
-                    $vpc = (float) $row['selling_price'] / (int) $row['credits'];
-                }
-                if ($vpc <= 0) {
-                    continue;
-                }
-                $available = round((float) $row['remaining_credits'] * $vpc, 2);
+                $available = (float) $row['remaining_credits'];
                 if ($available <= 0.001) {
                     continue;
                 }
                 $take = min($remaining, $available);
-                $creditsUsed = (int) ceil($take / $vpc);
+                $creditsUsed = (int) ceil($take);
                 $creditsUsed = min($creditsUsed, (int) $row['remaining_credits']);
                 if ($creditsUsed <= 0) {
                     continue;
                 }
-                $deduct = round($creditsUsed * $vpc, 2);
+                $deduct = (int) $take;
                 if ($deduct > $remaining) {
                     $deduct = round($remaining, 2);
                 }

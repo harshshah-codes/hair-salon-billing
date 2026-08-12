@@ -88,10 +88,11 @@ final class ReportRepository extends BaseRepository
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
-        $totals = ['revenue' => 0.0, 'package_deduction' => 0.0, 'count' => count($rows)];
+        $totals = ['revenue' => 0.0, 'package_deduction' => 0.0, 'credits' => 0.0, 'count' => count($rows)];
         foreach ($rows as $row) {
             $totals['revenue'] += (float)$row['amount_payable'];
             $totals['package_deduction'] += (float)$row['package_deduction'];
+            $totals['credits'] += (float) ($row['credits'] ?? 0);
         }
 
         return ['rows' => $rows, 'totals' => $totals];
@@ -186,7 +187,7 @@ final class ReportRepository extends BaseRepository
         $stmt = $this->db->prepare(
             "SELECT *
              FROM (
-                SELECT cpt.id AS sort_id, cpt.created_at, cpt.type, cpt.amount, cpt.reference_id,
+                SELECT cpt.id AS sort_id, cpt.created_at, cpt.type, cpt.amount, cp.credits AS credits, cpt.reference_id,
                        cp.name AS package_name, i.invoice_number,
                        (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = cpt.reference_id) AS service_date,
                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
@@ -209,7 +210,7 @@ final class ReportRepository extends BaseRepository
 
                  UNION ALL
 
-                 SELECT i.id AS sort_id, i.created_at, 'bill' AS type, i.total AS amount, i.id AS reference_id,
+                 SELECT i.id AS sort_id, i.created_at, 'bill' AS type, i.total AS amount, 0 AS credits, i.id AS reference_id,
                         NULL AS package_name, i.invoice_number,
                         (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS service_date,
                         (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
@@ -235,7 +236,7 @@ final class ReportRepository extends BaseRepository
         foreach ($rows as &$row) {
             // Credit-ish types add money to the wallet; bills/debits take it out.
             $isCredit = in_array($row['type'], ['purchase', 'credit'], true);
-            $amount = round((float) $row['amount'], 2);
+            $amount = $isCredit ? ($row['credits'] ?? 0) : ($row['amount'] ?? 0);
             $row['is_credit'] = $isCredit;
             $running = round($isCredit ? $running + $amount : $running - $amount, 2);
             $row['wallet_balance'] = $running;

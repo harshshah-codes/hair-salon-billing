@@ -111,10 +111,11 @@ class ServiceController extends Controller
         $repo = new ServiceRepository();
         $service = $repo->find($id);
         if (!$service) {
-            $this->json(['success' => false, 'message' => 'Service not found.'], 404);
+            $this->response->abort(404, 'Service not found.');
         }
         $repo->delete($id);
         $this->logActivity('services.delete', "Deleted service: {$service['name']}");
-        $this->json(['success' => true, 'message' => 'Service deleted.']);
+        $this->flash('success', 'Service deleted.');
+        $this->redirect('/services');
     }
 }

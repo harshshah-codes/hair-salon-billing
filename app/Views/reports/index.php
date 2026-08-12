@@ -274,16 +274,14 @@ $isRevenue = $current === 'revenue';
                 <?php else: ?>
                     <?php foreach ($rows as $row): ?>
                         <?php
-                            $amount = (float) $row['amount'];
+                            $isPurchase = $row['type'] === 'purchase';
+                            $amount = (float) ($isPurchase ? ($row['credits'] ?? 0) : ($row['amount'] ?? 0));
                             $bal = (float) $row['wallet_balance'];
-                            $isCredit = !empty($row['is_credit']);
-                            if (in_array($row['type'], ['debit', 'bill'], true)) {
-                                $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
-                            } else {
+                            $isCredit = $isPurchase || !empty($row['is_credit']);
+                            if ($isPurchase) {
                                 $service = $row['package_name'] ?: ($row['invoice_number'] ?: 'Package purchase');
-                                if (!empty($row['services'])) {
-                                    $service = trim($row['services']) . ' — ' . $service;
-                                }
+                            } else {
+                                $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
                             }
                             $stylist = $row['employees'] ?? '';
                             $branch = $row['branch'] ?? '';
@@ -294,18 +292,18 @@ $isRevenue = $current === 'revenue';
                             <td class="small"><?= e($stylist ?: '—') ?></td>
                             <td class="small text-muted"><?= e($branch ?: '—') ?></td>
                             <td class="text-end <?= $isCredit ? 'text-success' : 'text-danger' ?> fw-semibold">
-                                <?= $isCredit ? '+' : '−' ?><?= e(money(abs($amount))) ?>
+                                <?= $isCredit ? '+' : '−' ?><?= abs($amount) ?>
                             </td>
                             <td class="text-end <?= $bal < 0 ? 'text-danger' : ($bal > 0 ? 'text-success' : 'text-muted') ?> fw-semibold">
-                                <?= $bal < 0 ? '−' : ($bal > 0 ? '+' : '') ?><?= e(money(abs($bal))) ?>
+                                <?= $bal < 0 ? '−' : ($bal > 0 ? '+' : '') ?><?= abs($bal) ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
+</tbody>
+             </table>
+         </div>
+     </div>
 <?php endif; ?>
 
 <script>

@@ -36,7 +36,7 @@
                     <th class="text-end">Selling Price</th>
                     <th class="text-center">Credits</th>
                     <th class="text-center">Validity</th>
-                    <th class="text-center">Customers Using</th>
+                    
                     <th>Status</th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -57,14 +57,7 @@
                             </td>
                             <td class="text-end fw-semibold"><?php echo money($package['selling_price']); ?></td>
                             <td class="text-center"><span class="badge bg-success-soft"><?php echo (int) $package['credits']; ?></span></td>
-                            <td class="text-center"><?php echo (int) $package['validity_days']; ?> days</td>
-                            <td class="text-center">
-                                <?php if (($usage[$package['id']] ?? 0) > 0): ?>
-                                    <span class="badge bg-info-soft"><?php echo (int) $usage[$package['id']]; ?> using</span>
-                                <?php else: ?>
-                                    <span class="text-muted small">—</span>
-                                <?php endif; ?>
-                            </td>
+                            <td class="text-center"><?php echo $package['validity_days'] === 0 ? 'Lifetime' : (int) $package['validity_days'] . ' days'; ?></td>
                             <td><span class="status-pill status-<?php echo e($package['status']); ?>"><?php echo ucfirst($package['status']); ?></span></td>
                             <td class="text-end text-nowrap">
                                 <?php if (can('packages.edit')): ?>

@@ -116,16 +116,14 @@ final class ReportController extends Controller
                 $rows = [['Date', 'Service / Package', 'Stylist', 'Branch', 'Amount', 'Balance']];
                 foreach ($data['rows'] as $row) {
                     $balance = (float) ($row['wallet_balance'] ?? 0);
-                    $amount  = (float) $row['amount'];
-                    $isCredit = !empty($row['is_credit']);
-                    if (in_array($row['type'], ['debit', 'bill'], true)) {
-                        $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
-                    } else {
+                    if ($row['type'] === 'purchase') {
                         $service = $row['package_name'] ?? ($row['invoice_number'] ?: 'Package purchase');
-                        if (!empty($row['services'])) {
-                            $service = trim($row['services']) . ' — ' . $service;
-                        }
+                        $amount  = (float) ($row['credits'] ?? 0);
+                    } else {
+                        $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
+                        $amount  = (float) ($row['amount'] ?? 0);
                     }
+                    $isCredit = $row['type'] === 'purchase' || $row['type'] === 'credit';
                     $rows[] = [
                         $row['service_date'] ?? $row['created_at'],
                         $service,

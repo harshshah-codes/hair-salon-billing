@@ -109,10 +109,11 @@ class PackageController extends Controller
         $repo = new PackageRepository();
         $package = $repo->find($id);
         if (!$package) {
-            $this->json(['success' => false, 'message' => 'Package not found.'], 404);
+            $this->response->abort(404, 'Package not found.');
         }
         $repo->delete($id);
         $this->logActivity('packages.delete', "Deleted package: {$package['name']}");
-        $this->json(['success' => true, 'message' => 'Package deleted.']);
+        $this->flash('success', 'Package deleted.');
+        $this->redirect('/packages');
     }
 }

@@ -186,11 +186,12 @@ class EmployeeController extends Controller
         $repo = new EmployeeRepository();
         $employee = $repo->find($id);
         if (!$employee) {
-            $this->json(['success' => false, 'message' => 'Employee not found.'], 404);
+            $this->response->abort(404, 'Employee not found.');
         }
         $repo->delete($id);
         $this->logActivity('employees.delete', "Deleted employee: {$employee['name']}");
-        $this->json(['success' => true, 'message' => 'Employee deleted.']);
+        $this->flash('success', 'Employee deleted.');
+        $this->redirect('/employees');
     }
 
     private function savePhoto(array $file, ?string $existing = null): ?string

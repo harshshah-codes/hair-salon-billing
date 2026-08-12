@@ -62,7 +62,7 @@ final class CustomerPackageService
             ? (string)$custom['starts_on']
             : date('Y-m-d');
         $expiresOn = $validityDays ? date('Y-m-d', strtotime($startsOn . " +{$validityDays} days")) : null;
-        $valuePerCredit = $credits > 0 ? round($price / $credits, 2) : 0.00;
+        $valuePerCredit = 1.00;
 
         $id = $this->packageModel->create([
             'customer_id'        => $customerId,
