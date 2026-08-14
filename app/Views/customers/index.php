@@ -78,6 +78,8 @@ $sorts = [
                     <?php endforeach; ?>
                 </select>
             </div>
+
+            <button type="submit" class="btn btn-sm btn-primary">Apply</button>
         </form>
     </div>
 </div>
@@ -191,9 +193,6 @@ $sorts = [
                 form.submit();
             }, 400);
         });
-
-        $('#sort').on('change', function () { $('#customerFilterForm').submit(); });
-        $('#branch').on('change', function () { $('#customerFilterForm').submit(); });
 
         $('.confirm-form').each(function () {
             const $form = $(this);
