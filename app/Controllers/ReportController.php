@@ -20,14 +20,15 @@ final class ReportController extends Controller
             new \App\Repositories\EmployeeRepository(),
             new \App\Repositories\CustomerRepository(),
             new \App\Repositories\ServiceRepository(),
-            new \App\Repositories\PackageRepository()
+            new \App\Repositories\PackageRepository(),
+            new \App\Repositories\BranchRepository()
         );
     }
 
     public function index(): void
     {
         $type = (string)$this->request->query('type', 'revenue');
-        $from = (string)$this->request->query('from', $type === 'statements' ? '2015-01-01' : date('Y-m-01'));
+        $from = (string)$this->request->query('from', $type === 'statements' ? '2000-01-01' : date('Y-m-01'));
         $to   = (string)$this->request->query('to', date('Y-m-d'));
 
         $filters = [
@@ -36,16 +37,19 @@ final class ReportController extends Controller
             'employee_id' => $this->request->query('employee_id'),
             'customer_id' => $this->request->query('customer_id'),
             'service_id'  => $this->request->query('service_id'),
+            'branch_id'   => $this->request->query('branch_id'),
         ];
 
         $data = $this->service->dataset($type, $filters);
 
         $this->view('reports/index', array_merge($data, [
-            'pageTitle'    => 'Reports',
-            'active'       => 'reports',
-            'breadcrumbs'  => ['Reports' => '/reports'],
-            'options'      => $this->service->filterOptions(),
-            'query'        => $filters,
+            'pageTitle'         => 'Reports',
+            'active'            => 'reports',
+            'breadcrumbs'       => ['Reports' => '/reports'],
+            'options'           => $this->service->filterOptions(),
+            'query'             => $filters,
+            'selected_customer' => $this->service->customerFor((int) ($filters['customer_id'] ?? 0)) ?: null,
+            'scripts'           => ['js/pages/reports.js'],
         ]));
     }
 
@@ -55,11 +59,12 @@ final class ReportController extends Controller
         $type   = (string)$this->request->post('type', 'revenue');
 
         $filters = [
-            'from'        => (string)$this->request->post('from', date('Y-m-01')),
+            'from'        => (string)$this->request->post('from', $type === 'statements' ? '2000-01-01' : date('Y-m-01')),
             'to'          => (string)$this->request->post('to', date('Y-m-d')),
             'employee_id' => $this->request->post('employee_id'),
             'customer_id' => $this->request->post('customer_id'),
             'service_id'  => $this->request->post('service_id'),
+            'branch_id'   => $this->request->post('branch_id'),
         ];
 
         $data = $this->service->dataset($type, $filters);

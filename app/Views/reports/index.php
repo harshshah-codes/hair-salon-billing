@@ -31,6 +31,7 @@ $isRevenue = $current === 'revenue';
             <input type="hidden" name="employee_id" value="<?= e($query['employee_id'] ?? '') ?>">
             <input type="hidden" name="customer_id" value="<?= e($query['customer_id'] ?? '') ?>">
             <input type="hidden" name="service_id" value="<?= e($query['service_id'] ?? '') ?>">
+            <input type="hidden" name="branch_id" value="<?= e($query['branch_id'] ?? '') ?>">
             <button type="submit" name="format" value="print" class="btn btn-light"><i class="fa-solid fa-print me-1"></i>Print</button>
             <button type="submit" name="format" value="csv" class="btn btn-primary"><i class="fa-solid fa-file-csv me-1"></i>Export CSV</button>
         </form>
@@ -73,11 +74,12 @@ $isRevenue = $current === 'revenue';
             </div>
             <div class="col-md-2">
                 <label class="form-label small">Customer</label>
-                <select class="form-select" name="customer_id">
-                    <option value="">All</option>
-                    <?php foreach ($options['customers'] as $cust): ?>
-                        <option value="<?= (int)$cust['id'] ?>" <?= (string)($query['customer_id'] ?? '') === (string)$cust['id'] ? 'selected' : '' ?>><?= e($cust['name']) ?></option>
-                    <?php endforeach; ?>
+                <select class="form-select" name="customer_id" data-ajax-search="<?= e(url('/customers/ajax/search')) ?>">
+                    <?php if (!empty($selected_customer)): ?>
+                        <option value="<?= (int)$selected_customer['id'] ?>" selected><?= e($selected_customer['name']) ?></option>
+                    <?php else: ?>
+                        <option value=""></option>
+                    <?php endif; ?>
                 </select>
             </div>
             <div class="col-md-2">
@@ -86,6 +88,15 @@ $isRevenue = $current === 'revenue';
                     <option value="">All</option>
                     <?php foreach ($options['services'] as $svc): ?>
                         <option value="<?= (int)$svc['id'] ?>" <?= (string)($query['service_id'] ?? '') === (string)$svc['id'] ? 'selected' : '' ?>><?= e($svc['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Branch</label>
+                <select class="form-select" name="branch_id">
+                    <option value="">All</option>
+                    <?php foreach ($options['branches'] as $br): ?>
+                        <option value="<?= (int)$br['id'] ?>" <?= (string)($query['branch_id'] ?? '') === (string)$br['id'] ? 'selected' : '' ?>><?= e($br['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>

@@ -19,6 +19,14 @@ final class ReportRepository extends BaseRepository
         return '';
     }
 
+    private function branchWhere(?int $branchId, string $column = 'branch_id'): string
+    {
+        if (!$branchId) {
+            return '';
+        }
+        return " AND {$column} = " . (int) $branchId;
+    }
+
     /** Settled (non-draft, non-cancelled) invoice statuses. */
     private function settled(): string
     {
@@ -26,35 +34,36 @@ final class ReportRepository extends BaseRepository
     }
 
     /** Daily revenue in a range (settled invoices, payable amount). */
-    public function revenueSeries(string $from, string $to): array
+    public function revenueSeries(string $from, string $to, ?int $branchId = null): array
     {
         $sql = "SELECT DATE(created_at) AS day,
                        COALESCE(SUM(payable),0) AS revenue,
                        COALESCE(SUM(package_used),0) AS package_used,
                        COUNT(*) AS bills
                 FROM invoices
-                WHERE status IN ('issued','paid','partially_paid'){$this->dateWhere($from, $to)}
+                WHERE status IN ('issued','paid','partially_paid'){$this->branchWhere($branchId)}{$this->dateWhere($from, $to)}
                 GROUP BY DATE(created_at) ORDER BY day ASC";
         return $this->db->query($sql)->fetchAll();
     }
 
-    public function revenueTotals(string $from, string $to): array
+    public function revenueTotals(string $from, string $to, ?int $branchId = null): array
     {
         $sql = "SELECT COALESCE(SUM(payable),0) AS revenue,
                        COALESCE(SUM(package_used),0) AS package_deduction,
                        COALESCE(SUM(gst_amount),0) AS gst,
                        COUNT(*) AS bill_count
-                FROM invoices WHERE status IN ('issued','paid','partially_paid'){$this->dateWhere($from, $to)}";
+                FROM invoices WHERE status IN ('issued','paid','partially_paid'){$this->branchWhere($branchId)}{$this->dateWhere($from, $to)}";
         return $this->db->query($sql)->fetch();
     }
 
-    /** Revenue with optional employee / service / customer filters. */
+    /** Revenue with optional employee / service / customer / branch filters. */
     public function filteredRevenue(
         string $from,
         string $to,
         ?int $employeeId = null,
         ?int $serviceId = null,
-        ?int $customerId = null
+        ?int $customerId = null,
+        ?int $branchId = null
     ): array {
         $where = ['i.status IN (?, ?, ?)'];
         $params = ['issued', 'paid', 'partially_paid'];
@@ -75,6 +84,10 @@ final class ReportRepository extends BaseRepository
         if ($serviceId) {
             $where[] = 'EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.invoice_id = i.id AND ii.service_id = ?)';
             $params[] = $serviceId;
+        }
+        if ($branchId) {
+            $where[] = 'i.branch_id = ?';
+            $params[] = $branchId;
         }
 
         $whereSql = implode(' AND ', $where);
@@ -111,7 +124,7 @@ final class ReportRepository extends BaseRepository
     }
 
     /** Employee earnings (allocations on settled invoices) within a range. */
-    public function employeeEarnings(string $from, string $to, ?int $employeeId = null): array
+    public function employeeEarnings(string $from, string $to, ?int $employeeId = null, ?int $branchId = null): array
     {
         $where = "i.status IN ('issued','paid','partially_paid') AND DATE(i.created_at) BETWEEN '{$from}' AND '{$to}'";
         $params = [];
@@ -119,6 +132,10 @@ final class ReportRepository extends BaseRepository
         if ($employeeId) {
             $bind = ' AND a.employee_id = ?';
             $params[] = $employeeId;
+        }
+        if ($branchId) {
+            $bind .= ' AND i.branch_id = ?';
+            $params[] = $branchId;
         }
 
         $stmt = $this->db->prepare(
@@ -138,13 +155,17 @@ final class ReportRepository extends BaseRepository
     }
 
     /** Service revenue (invoice items) within a range. */
-    public function serviceRevenue(string $from, string $to, ?int $serviceId = null): array
+    public function serviceRevenue(string $from, string $to, ?int $serviceId = null, ?int $branchId = null): array
     {
         $where = "i.status IN ('issued','paid','partially_paid') AND DATE(i.created_at) BETWEEN '{$from}' AND '{$to}'";
         $params = [];
         if ($serviceId) {
             $where .= ' AND ii.service_id = ?';
             $params[] = $serviceId;
+        }
+        if ($branchId) {
+            $where .= ' AND i.branch_id = ?';
+            $params[] = $branchId;
         }
 
         $stmt = $this->db->prepare(
@@ -164,10 +185,11 @@ final class ReportRepository extends BaseRepository
     }
 
     /** Customers with outstanding balances. */
-    public function outstanding(int $limit = 500): array
+    public function outstanding(int $limit = 500, ?int $branchId = null): array
     {
+        $branchWhere = $this->branchWhere($branchId);
         $outstandingExpr = "(SELECT COALESCE(SUM(i.balance), 0) FROM invoices i
-                              WHERE i.customer_id = c.id AND i.status IN ('issued','partially_paid'))";
+                              WHERE i.customer_id = c.id AND i.status IN ('issued','partially_paid'){$branchWhere})";
         return $this->db->query(
             "SELECT c.id, c.name, c.mobile AS phone, {$outstandingExpr} AS outstanding,
                     (SELECT cp.name FROM customer_packages cp
@@ -182,8 +204,9 @@ final class ReportRepository extends BaseRepository
     }
 
     /** Ledger statement for one customer within a range. */
-    public function customerStatement(int $customerId, string $from, string $to): array
+    public function customerStatement(int $customerId, string $from, string $to, ?int $branchId = null): array
     {
+        $branch = $this->branchWhere($branchId);
         $stmt = $this->db->prepare(
             "SELECT *
              FROM (
@@ -197,39 +220,70 @@ final class ReportRepository extends BaseRepository
                         FROM employee_allocations ea
                         JOIN employees e ON e.id = ea.employee_id
                         WHERE ea.invoice_id = cpt.reference_id) AS employees,
-                       COALESCE(
-                           cp.branch_address,
-                           b.name,
-                           ''
-                       ) AS branch
+                       COALESCE(cp.branch_address, b.name, '') AS branch
                  FROM customer_package_transactions cpt
                  LEFT JOIN customer_packages cp ON cp.id = cpt.customer_package_id
                  LEFT JOIN invoices i ON i.id = cpt.reference_id
                  LEFT JOIN branches b ON b.id = i.branch_id
-                 WHERE cpt.customer_id = ? AND DATE(cpt.created_at) BETWEEN ? AND ?
+                 WHERE cpt.customer_id = ? AND cpt.type <> 'debit' AND DATE(cpt.created_at) BETWEEN ? AND ?
 
                  UNION ALL
 
-                 SELECT i.id AS sort_id, i.created_at, 'bill' AS type, i.total AS amount, 0 AS credits, i.id AS reference_id,
-                        NULL AS package_name, i.invoice_number,
-                        (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS service_date,
-                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
-                         FROM invoice_items ii
-                         WHERE ii.invoice_id = i.id) AS services,
-                        (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
-                         FROM employee_allocations ea
-                         JOIN employees e ON e.id = ea.employee_id
-                         WHERE ea.invoice_id = i.id) AS employees,
-                        COALESCE(b.name, '') AS branch
+                SELECT g.sort_id AS sort_id, i.created_at, 'debit' AS type,
+                       ROUND(cpt.amount * g.amount / NULLIF(i.total, 0), 2) AS amount,
+                       cp.credits AS credits, i.id AS reference_id,
+                       cp.name AS package_name, i.invoice_number,
+                       g.service_date,
+                       (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
+                        FROM invoice_items ii
+                        WHERE ii.invoice_id = i.id AND ii.service_date <=> g.service_date) AS services,
+                       (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
+                        FROM employee_allocations ea
+                        JOIN employees e ON e.id = ea.employee_id
+                        WHERE ea.invoice_item_id IN (
+                            SELECT id FROM invoice_items WHERE invoice_id = i.id AND service_date <=> g.service_date
+                        )) AS employees,
+                       COALESCE(cp.branch_address, b.name, '') AS branch
+                 FROM customer_package_transactions cpt
+                 JOIN customer_packages cp ON cp.id = cpt.customer_package_id
+                 JOIN invoices i ON i.id = cpt.reference_id
+                 LEFT JOIN branches b ON b.id = i.branch_id
+                 JOIN (
+                     SELECT invoice_id, service_date, MIN(id) AS sort_id, SUM(amount) AS amount
+                     FROM invoice_items
+                     GROUP BY invoice_id, service_date
+                 ) g ON g.invoice_id = i.id
+                 WHERE cpt.customer_id = ? AND cpt.type = 'debit' AND DATE(cpt.created_at) BETWEEN ? AND ?{$branch}
+
+                 UNION ALL
+
+                SELECT g.sort_id AS sort_id, i.created_at, 'bill' AS type, g.amount AS amount, 0 AS credits, i.id AS reference_id,
+                       NULL AS package_name, i.invoice_number,
+                       g.service_date,
+                       (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
+                        FROM invoice_items ii
+                        WHERE ii.invoice_id = i.id AND ii.service_date <=> g.service_date) AS services,
+                       (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name SEPARATOR ', ')
+                        FROM employee_allocations ea
+                        JOIN employees e ON e.id = ea.employee_id
+                        WHERE ea.invoice_item_id IN (
+                            SELECT id FROM invoice_items WHERE invoice_id = i.id AND service_date <=> g.service_date
+                        )) AS employees,
+                       COALESCE(b.name, '') AS branch
                  FROM invoices i
+                 JOIN (
+                     SELECT invoice_id, service_date, MIN(id) AS sort_id, SUM(amount) AS amount
+                     FROM invoice_items
+                     GROUP BY invoice_id, service_date
+                 ) g ON g.invoice_id = i.id
                  LEFT JOIN branches b ON b.id = i.branch_id
                  WHERE i.customer_id = ? AND i.status IN ('paid','issued','partially_paid')
                    AND NOT EXISTS (SELECT 1 FROM customer_package_transactions c WHERE c.reference_id = i.id)
-                   AND DATE(i.created_at) BETWEEN ? AND ?
+                   AND DATE(i.created_at) BETWEEN ? AND ?{$branch}
              ) stmt_rows
-             ORDER BY created_at ASC, sort_id ASC"
+             ORDER BY COALESCE(service_date, created_at) ASC, sort_id ASC"
         );
-        $stmt->execute([$customerId, $from, $to, $customerId, $from, $to]);
+        $stmt->execute([$customerId, $from, $to, $customerId, $from, $to, $customerId, $from, $to]);
 
         $rows = $stmt->fetchAll();
         $running = 0.0;

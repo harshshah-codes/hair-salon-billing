@@ -152,7 +152,7 @@
                             <?php foreach ($recent as $r): ?>
                                 <tr>
                                     <td><a href="<?php echo url('/billing/invoice/' . (int) $r['invoice_id']); ?>" class="fw-semibold"><?php echo e($r['invoice_number']); ?></a></td>
-                                    <td class="text-nowrap"><?php echo format_date($r['invoice_date']); ?></td>
+                                    <td class="text-nowrap"><?php echo format_date($r['service_date'] ?? $r['invoice_date']); ?></td>
                                     <td><?php echo e($r['customer_name']); ?></td>
                                     <td><?php echo e($r['service']); ?></td>
                                     <td class="text-end fw-semibold text-success"><?php echo money($r['amount']); ?></td>

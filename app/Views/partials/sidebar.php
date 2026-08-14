@@ -5,7 +5,7 @@
             <span class="brand-mark">
                 <i class="fa-solid fa-scissors"></i>
             </span>
-            <span class="brand-name">Nirav <em>Hair Storm</em></span>
+            <span class="brand-name">Nirav <em>Hairstorm</em></span>
         </a>
         <button class="btn btn-icon d-lg-none" type="button" id="sidebarClose" aria-label="Close menu">
             <i class="fa-solid fa-xmark"></i>

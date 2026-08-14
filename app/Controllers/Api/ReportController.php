@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controllers\Api;
 
+use App\Repositories\BranchRepository;
 use App\Repositories\CustomerRepository;
 use App\Repositories\EmployeeRepository;
 use App\Repositories\PackageRepository;
@@ -23,11 +24,12 @@ final class ReportController extends ApiController
         }
 
         $filters = [
-            'from' => (string) $this->request->query('from', date('Y-m-01')),
+            'from' => (string) $this->request->query('from', $type === 'statements' ? '2000-01-01' : date('Y-m-01')),
             'to' => (string) $this->request->query('to', date('Y-m-d')),
             'employee_id' => $this->request->query('employee_id') !== null ? (int) $this->request->query('employee_id') : null,
             'customer_id' => $this->request->query('customer_id') !== null ? (int) $this->request->query('customer_id') : null,
             'service_id' => $this->request->query('service_id') !== null ? (int) $this->request->query('service_id') : null,
+            'branch_id' => $this->request->query('branch_id') !== null ? (int) $this->request->query('branch_id') : null,
         ];
 
         if ($type === 'statements' && $filters['customer_id'] === null) {
@@ -39,7 +41,8 @@ final class ReportController extends ApiController
             new EmployeeRepository(),
             new CustomerRepository(),
             new ServiceRepository(),
-            new PackageRepository()
+            new PackageRepository(),
+            new BranchRepository()
         );
 
         $this->ok($service->dataset($type, $filters));

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Repositories\BranchRepository;
 use App\Repositories\CustomerRepository;
 use App\Repositories\EmployeeRepository;
 use App\Repositories\PackageRepository;
@@ -17,7 +18,8 @@ final class ReportService
         private EmployeeRepository $employees,
         private CustomerRepository $customers,
         private ServiceRepository $services,
-        private PackageRepository $packages
+        private PackageRepository $packages,
+        private BranchRepository $branches
     ) {
     }
 
@@ -30,15 +32,16 @@ final class ReportService
         $employeeId = isset($filters['employee_id']) ? (int)$filters['employee_id'] : null;
         $customerId = isset($filters['customer_id']) ? (int)$filters['customer_id'] : null;
         $serviceId  = isset($filters['service_id'])  ? (int)$filters['service_id']  : null;
+        $branchId   = isset($filters['branch_id'])   ? (int)$filters['branch_id']   : null;
 
         $data = ['type' => $type, 'from' => $from, 'to' => $to, 'filters' => $filters];
 
         switch ($type) {
             case 'revenue':
-                $series = $this->reports->revenueSeries($from, $to);
+                $series = $this->reports->revenueSeries($from, $to, $branchId);
                 $data['series'] = $series;
-                $data['totals'] = $this->reports->revenueTotals($from, $to);
-                $data['detail'] = $this->reports->filteredRevenue($from, $to, $employeeId, $serviceId, $customerId);
+                $data['totals'] = $this->reports->revenueTotals($from, $to, $branchId);
+                $data['detail'] = $this->reports->filteredRevenue($from, $to, $employeeId, $serviceId, $customerId, $branchId);
                 break;
 
             case 'package_sales':
@@ -46,19 +49,19 @@ final class ReportService
                 break;
 
             case 'employee_earnings':
-                $data['rows'] = $this->reports->employeeEarnings($from, $to, $employeeId);
+                $data['rows'] = $this->reports->employeeEarnings($from, $to, $employeeId, $branchId);
                 break;
 
             case 'service_revenue':
-                $data['rows'] = $this->reports->serviceRevenue($from, $to, $serviceId);
+                $data['rows'] = $this->reports->serviceRevenue($from, $to, $serviceId, $branchId);
                 break;
 
             case 'outstanding':
-                $data['rows'] = $this->reports->outstanding();
+                $data['rows'] = $this->reports->outstanding(500, $branchId);
                 break;
 
             case 'statements':
-                $data['rows'] = $customerId ? $this->reports->customerStatement($customerId, $from, $to) : [];
+                $data['rows'] = $customerId ? $this->reports->customerStatement($customerId, $from, $to, $branchId) : [];
                 break;
         }
 
@@ -69,9 +72,20 @@ final class ReportService
     {
         return [
             'employees' => $this->employees->active(),
-            'customers' => $this->customers->search('', 500),
+            'customers' => [],
             'services'  => $this->services->search('', 500),
             'packages'  => $this->packages->active(),
+            'branches'  => $this->branches->active(),
         ];
+    }
+
+    /** Minimal record for the currently selected customer (AJAX filter preset). */
+    public function customerFor(int $id): ?array
+    {
+        $row = $this->customers->find($id);
+        if (!$row) {
+            return null;
+        }
+        return ['id' => (int) $row['id'], 'name' => (string) $row['name'], 'mobile' => (string) ($row['mobile'] ?? '')];
     }
 }

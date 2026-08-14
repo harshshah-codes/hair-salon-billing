@@ -91,7 +91,7 @@ final class EmployeeRepository extends BaseRepository
         $settled = "i.status IN ('issued','paid','partially_paid')";
         $stmt = $this->db->prepare(
             "SELECT a.amount, i.id AS invoice_id, i.invoice_number, i.invoice_date,
-                    ii.description AS service, c.name AS customer_name
+                    ii.service_date, ii.description AS service, c.name AS customer_name
              FROM employee_allocations a
              JOIN invoice_items ii ON ii.id = a.invoice_item_id
              JOIN invoices i ON i.id = a.invoice_id AND {$settled}
