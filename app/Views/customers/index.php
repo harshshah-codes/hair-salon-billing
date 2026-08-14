@@ -3,6 +3,8 @@
 /** @var string $search */
 /** @var string $filter */
 /** @var string $sort */
+/** @var int    $branch */
+/** @var array  $branches */
 
 $buildQuery = static function (array $overrides): string {
     $params = array_merge($_GET, $overrides);
@@ -56,7 +58,19 @@ $sorts = [
                 <?php endforeach; ?>
             </div>
 
-            <div class="ms-auto d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 text-nowrap" for="branch">Branch</label>
+                <select class="form-select form-select-sm w-auto" id="branch" name="branch">
+                    <option value="">All Branches</option>
+                    <?php foreach ($branches as $b): ?>
+                        <option value="<?= (int)$b['id'] ?>" <?= $branch === (int)$b['id'] ? 'selected' : '' ?>>
+                            <?= e($b['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
                 <label class="form-label mb-0 text-nowrap" for="sort">Sort</label>
                 <select class="form-select form-select-sm w-auto" id="sort" name="sort">
                     <?php foreach ($sorts as $key => $label): ?>
@@ -139,6 +153,7 @@ $sorts = [
                                 <a href="<?= e(url('/customers/' . $customer['id'] . '/edit')) ?>" class="btn btn-icon" title="Edit">
                                     <i class="fa-solid fa-pen"></i>
                                 </a>
+                                <?php if (can('customers.delete')): ?>
                                 <form method="post" action="<?= e(url('/customers/' . $customer['id'] . '/delete')) ?>"
                                       class="d-inline confirm-form" data-confirm-title="Delete customer?"
                                       data-confirm-text="This will permanently remove <?= e(addslashes($customer['name'])) ?> and their history.">
@@ -147,6 +162,7 @@ $sorts = [
                                         <i class="fa-solid fa-trash-can"></i>
                                     </button>
                                 </form>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -177,6 +193,7 @@ $sorts = [
         });
 
         $('#sort').on('change', function () { $('#customerFilterForm').submit(); });
+        $('#branch').on('change', function () { $('#customerFilterForm').submit(); });
 
         $('.confirm-form').each(function () {
             const $form = $(this);

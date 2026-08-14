@@ -25,10 +25,18 @@ final class CustomerRepository extends BaseRepository
         ?string $filter = 'all',
         ?string $sort = 'created',
         int $page = 1,
-        int $perPage = 20
+        int $perPage = 20,
+        ?int $branchId = null
     ): array {
         $where   = ['c.deleted_at IS NULL'];
         $params  = [];
+
+        if ($branchId) {
+            $where[] = 'EXISTS (SELECT 1 FROM customer_packages bpc
+                                 JOIN branches bf ON bf.address = bpc.branch_address
+                                 WHERE bpc.customer_id = c.id AND bf.id = ?)';
+            $params[] = $branchId;
+        }
 
         $search = trim($search);
         if ($search !== '') {

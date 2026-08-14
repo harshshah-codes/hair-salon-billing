@@ -39,10 +39,11 @@ final class CustomerController extends Controller
         $search  = trim((string)$this->request->query('search', ''));
         $filter  = (string)$this->request->query('filter', 'all');
         $sort    = (string)$this->request->query('sort', 'created');
+        $branch  = max(0, (int)$this->request->query('branch', 0));
         $page    = max(1, (int)$this->request->query('page', 1));
         $perPage = 20;
 
-        $pagination = $this->repo->listing($search, $filter, $sort, $page, $perPage);
+        $pagination = $this->repo->listing($search, $filter, $sort, $page, $perPage, $branch ?: null);
 
         $this->view('customers/index', [
             'pageTitle'  => 'Customers',
@@ -52,6 +53,8 @@ final class CustomerController extends Controller
             'search'     => $search,
             'filter'     => $filter,
             'sort'       => $sort,
+            'branch'     => $branch,
+            'branches'   => (new \App\Repositories\BranchRepository())->active(),
         ]);
     }
 
