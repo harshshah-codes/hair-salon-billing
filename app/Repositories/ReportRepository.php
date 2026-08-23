@@ -210,7 +210,9 @@ final class ReportRepository extends BaseRepository
         $stmt = $this->db->prepare(
             "SELECT *
              FROM (
-                SELECT cpt.id AS sort_id, cpt.created_at, cpt.type, cpt.amount, cp.credits AS credits, cpt.reference_id,
+                SELECT cpt.id AS sort_id,
+                       COALESCE(CONCAT(cp.starts_on, ' 00:00:00'), cpt.created_at) AS created_at,
+                       cpt.type, cpt.amount, cp.credits AS credits, cpt.reference_id,
                        cp.name AS package_name, i.invoice_number,
                        (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = cpt.reference_id) AS service_date,
                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
@@ -225,7 +227,8 @@ final class ReportRepository extends BaseRepository
                  LEFT JOIN customer_packages cp ON cp.id = cpt.customer_package_id
                  LEFT JOIN invoices i ON i.id = cpt.reference_id
                  LEFT JOIN branches b ON b.id = i.branch_id
-                 WHERE cpt.customer_id = ? AND cpt.type <> 'debit' AND DATE(cpt.created_at) BETWEEN ? AND ?
+                 WHERE cpt.customer_id = ? AND cpt.type <> 'debit'
+                   AND DATE(COALESCE(cp.starts_on, cpt.created_at)) BETWEEN ? AND ?
 
                  UNION ALL
 
