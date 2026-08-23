@@ -86,6 +86,11 @@
                             <div class="fw-semibold" id="tBalanceAfter">₹0.00</div>
                         </div>
                     </div>
+                    <?php if (can('packages.create')): ?>
+                        <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2 d-none" id="btnAssignPackage">
+                            <i class="fa-solid fa-gift me-1"></i>Assign Package
+                        </button>
+                    <?php endif; ?>
                 </div>
 
                 <div class="payment-totals mb-3">
@@ -140,9 +145,98 @@
 <!-- Create customer modal -->
 <?php include APP_PATH . '/Views/partials/create_customer_modal.php'; ?>
 
+<!-- Assign package modal (POS) -->
+<?php if (can('packages.create')): ?>
+<div class="modal fade" id="posAssignPackageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="posAssignPackageForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Assign Package</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Package Source</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="source" id="posSourcePredefined" value="predefined" checked>
+                                <label class="form-check-label" for="posSourcePredefined">Predefined</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="source" id="posSourceCustom" value="custom">
+                                <label class="form-check-label" for="posSourceCustom">Custom</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="posPredefinedFields">
+                        <label class="form-label">Choose Package <span class="text-danger">*</span></label>
+                        <select class="form-select" name="package_id" id="posPackageSelect">
+                            <option value="">Select a package…</option>
+                        </select>
+                        <div class="row g-2 mt-1 d-none" id="posPackagePreview">
+                            <div class="col-4"><span class="text-muted small">Price</span><div class="fw-semibold" id="posPreviewPrice"></div></div>
+                            <div class="col-4"><span class="text-muted small">Credits</span><div class="fw-semibold" id="posPreviewCredits"></div></div>
+                            <div class="col-4"><span class="text-muted small">Validity</span><div class="fw-semibold" id="posPreviewValidity"></div></div>
+                        </div>
+                    </div>
+
+                    <div id="posCustomFields" style="display:none">
+                        <div class="row g-3">
+                            <div class="col-md-7"><label class="form-label">Package Name <span class="text-danger">*</span></label>
+                                <input class="form-control" name="name" placeholder="e.g. Bridal Special"></div>
+                            <div class="col-md-5"><label class="form-label">Selling Price (₹)</label>
+                                <input class="form-control" name="selling_price" type="number" step="0.01" min="0"></div>
+                            <div class="col-md-6"><label class="form-label">Credits</label>
+                                <input class="form-control" name="credits" type="number" min="1"></div>
+                            <div class="col-md-6"><label class="form-label">Validity (days)</label>
+                                <input class="form-control" name="validity_days" type="number" min="1" value="30"></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Purchased On</label>
+                        <input class="form-control" type="date" name="starts_on" id="posStartsOn"
+                               max="<?= e(date('Y-m-d')) ?>">
+                        <div class="form-text">Backdate if the package was purchased earlier.</div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Sold By <span class="text-danger">*</span></label>
+                        <select class="form-select" name="sold_by" required>
+                            <option value="">Select staff…</option>
+                            <?php foreach ($employees as $emp): ?>
+                                <option value="<?= (int) $emp['id'] ?>"><?= e($emp['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-gift me-1"></i>Assign Package</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <script>
     window.BILLING = {
         employees: <?php echo json_encode(array_map(fn ($e) => ['id' => (int) $e['id'], 'name' => $e['name']], $employees)); ?>,
+        packages: <?php echo json_encode(array_map(fn ($t) => [
+            'id' => (int) $t['id'],
+            'name' => $t['name'],
+            'price' => (float) $t['selling_price'],
+            'credits' => (int) $t['credits'],
+            'validity_days' => (int) ($t['validity_days'] ?? 0),
+        ], $templates ?? [])); ?>,
         preselectCustomerId: <?php echo (int) $preselectCustomerId; ?>
     };
 </script>

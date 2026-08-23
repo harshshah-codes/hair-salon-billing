@@ -43,7 +43,8 @@ final class CustomerPackageController extends Controller
         }
 
         $type = (string) $this->request->post('source', (string) $this->request->post('package_type', 'predefined'));
-        $data = $this->request->only(['package_id', 'name', 'price', 'selling_price', 'credits', 'validity_days', 'notes', 'sold_by']);
+        $data = $this->request->only(['package_id', 'name', 'price', 'selling_price', 'credits', 'validity_days', 'notes', 'sold_by', 'starts_on']);
+        $data['branch_address'] = \App\Core\Session::branch()['address'] ?? null;
         if (isset($data['selling_price']) && $data['selling_price'] !== '' && $data['selling_price'] !== null) {
             $data['price'] = $data['selling_price'];
         }
@@ -57,6 +58,7 @@ final class CustomerPackageController extends Controller
             'validity_days' => 'nullable|integer|min:1|max:3650',
             'notes'         => 'nullable|max:500',
             'sold_by'       => 'required|integer|exists:employees,id',
+            'starts_on'     => 'nullable|date',
         ]);
         if ($errors) {
             if ($this->request->isAjax()) {

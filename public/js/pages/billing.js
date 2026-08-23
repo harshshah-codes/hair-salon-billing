@@ -83,7 +83,7 @@
             + '<div class="small text-muted"><i class="fa-solid fa-phone me-1"></i>' + (c.mobile || '—') + '</div>'
             + '</div>'
             + '<div class="text-end small d-none d-md-block">'
-            + '<div><span class="text-muted">Balance: </span><span class="fw-semibold text-success">' + money(c.credits) + '</span></div>'
+            + '<div><span class="text-muted">Balance: </span><span class="fw-semibold ' + (c.credits > 0 ? 'text-success' : 'text-danger') + '">' + money(c.credits) + '</span></div>'
             + '<div><span class="text-muted">Outstanding: </span><span class="fw-semibold ' + (c.outstanding > 0 ? 'text-danger' : 'text-muted') + '">' + money(c.outstanding) + '</span></div>'
             + '</div>'
             + '<button type="button" class="btn btn-sm btn-light" id="btnChangeCustomer"><i class="fa-solid fa-rotate-left"></i></button>'
@@ -95,6 +95,7 @@
         } else {
             $('#pkgAvailable').text(money(c.credits)).removeClass('text-success').addClass('text-danger');
         }
+        $('#btnAssignPackage').toggleClass('d-none', c.credits > 0);
         recalc();
     }
 
@@ -103,6 +104,7 @@
         $input.val('').focus();
         $('#customerCard').addClass('d-none').html('');
         $('#pkgAvailable').text('₹0.00').removeClass('text-success').addClass('text-danger');
+        $('#btnAssignPackage').addClass('d-none');
         recalc();
     });
 
@@ -371,11 +373,67 @@
         CreateCustomerModal.open({ phone: /^\d+$/.test(q) ? q : '', name: '' });
     }
 
+    /* ---------- Assign package from POS ---------- */
+    const $posPkgModal = $('#posAssignPackageModal');
+
+    function initPosAssignModal() {
+        const $sel = $('#posPackageSelect');
+        (BILLING.packages || []).forEach((p) => {
+            $sel.append('<option value="' + p.id + '" data-price="' + p.price + '" data-credits="' + p.credits + '" data-validity="' + p.validity_days + '">'
+                + p.name + ' — ₹' + Number(p.price).toFixed(2) + ' (' + p.credits + ' credits'
+                + (p.validity_days ? ', ' + p.validity_days + ' days' : '') + ')</option>');
+        });
+        $('input[name="source"]', $posPkgModal).on('change', function () {
+            const custom = $(this).val() === 'custom';
+            $('#posCustomFields').toggle(custom);
+            $('#posPredefinedFields').toggle(!custom);
+        });
+        $('#posPackageSelect').on('change', function () {
+            const opt = $(this).find(':selected');
+            if (!opt.val()) { $('#posPackagePreview').addClass('d-none'); return; }
+            $('#posPreviewPrice').text(money(opt.data('price')));
+            $('#posPreviewCredits').text(opt.data('credits') + ' credits');
+            $('#posPreviewValidity').text((parseInt(opt.data('validity'), 10) || 0) + ' days');
+            $('#posPackagePreview').removeClass('d-none');
+        });
+    }
+
+    $(document).on('click', '#btnAssignPackage', function () {
+        if (!state.customer) return;
+        $('#posStartsOn').val(todayStr());
+        $posPkgModal.modal('show');
+    });
+
+    $('#posAssignPackageForm').on('submit', function (e) {
+        e.preventDefault();
+        if (!state.customer) return;
+        const form = $(this);
+        const btn = form.find('[type=submit]').prop('disabled', true);
+        $.post('/customers/' + state.customer.id + '/packages', form.serialize())
+            .done((res) => {
+                if (!res.success) {
+                    const flat = Object.values(res.errors || {}).map((v) => Array.isArray(v) ? v.join(' ') : v);
+                    Swal.fire({ icon: 'error', title: res.message || 'Could not assign package', html: flat.join('<br>') });
+                    return;
+                }
+                $posPkgModal.modal('hide');
+                form.trigger('reset');
+                $('#posPackagePreview').addClass('d-none');
+                Swal.fire({ icon: 'success', title: res.message, timer: 1400, showConfirmButton: false });
+                $.getJSON('/billing/customer/' + state.customer.id).done((r) => {
+                    if (r.success) selectCustomer(r.customer);
+                });
+            })
+            .fail(() => Swal.fire({ icon: 'error', title: 'Could not assign package' }))
+            .always(() => btn.prop('disabled', false));
+    });
+
     /* ---------- Init ---------- */
     window.NHS.init = function () {
         CreateCustomerModal.onCreated(function (customer) {
             selectCustomer(customer);
         });
+        if ($('#posAssignPackageModal').length) initPosAssignModal();
         addItemRow();
         if (BILLING.preselectCustomerId) {
             $.getJSON('/billing/customer/' + BILLING.preselectCustomerId)
