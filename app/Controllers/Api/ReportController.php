@@ -24,7 +24,7 @@ final class ReportController extends ApiController
         }
 
         $filters = [
-            'from' => (string) $this->request->query('from', $type === 'statements' ? '2000-01-01' : date('Y-m-01')),
+            'from' => (string) $this->request->query('from', '2000-01-01'),
             'to' => (string) $this->request->query('to', date('Y-m-d')),
             'employee_id' => $this->request->query('employee_id') !== null ? (int) $this->request->query('employee_id') : null,
             'customer_id' => $this->request->query('customer_id') !== null ? (int) $this->request->query('customer_id') : null,

@@ -28,7 +28,7 @@ final class ReportController extends Controller
     public function index(): void
     {
         $type = (string)$this->request->query('type', 'revenue');
-        $from = (string)$this->request->query('from', $type === 'statements' ? '2000-01-01' : date('Y-m-01'));
+        $from = (string)$this->request->query('from', '2000-01-01');
         $to   = (string)$this->request->query('to', date('Y-m-d'));
 
         $filters = [
@@ -59,7 +59,7 @@ final class ReportController extends Controller
         $type   = (string)$this->request->post('type', 'revenue');
 
         $filters = [
-            'from'        => (string)$this->request->post('from', $type === 'statements' ? '2000-01-01' : date('Y-m-01')),
+            'from'        => (string)$this->request->post('from', '2000-01-01'),
             'to'          => (string)$this->request->post('to', date('Y-m-d')),
             'employee_id' => $this->request->post('employee_id'),
             'customer_id' => $this->request->post('customer_id'),
