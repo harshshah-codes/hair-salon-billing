@@ -45,12 +45,6 @@ final class ReportController extends ApiController
             new BranchRepository()
         );
 
-        $data = $service->dataset($type, $filters);
-
-        if ($type === 'statements') {
-            error_log('ReportController statements response: ' . print_r($data, true));
-        }
-
-        $this->ok($data);
+        $this->ok($service->dataset($type, $filters));
     }
 }
