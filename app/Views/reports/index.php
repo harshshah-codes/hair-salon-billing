@@ -294,7 +294,7 @@ $isRevenue = $current === 'revenue';
                             } else {
                                 $service = $row['services'] ?: 'Transaction ' . ($row['invoice_number'] ?? '');
                             }
-                            $stylist = $row['employees'] ?? '';
+                            $stylist = $row['employees'] ?? ($isPurchase && isset($row['sold_by_name']) ? $row['sold_by_name'] : '');
                             $branch = $row['branch'] ?? '';
                         ?>
                         <tr>

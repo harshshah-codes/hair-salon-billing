@@ -213,7 +213,7 @@ final class ReportRepository extends BaseRepository
                 SELECT cpt.id AS sort_id,
                        COALESCE(CONCAT(cp.starts_on, ' 00:00:00'), cpt.created_at) AS created_at,
                        cpt.type, cpt.amount, cp.credits AS credits, cpt.reference_id,
-                       cp.name AS package_name, i.invoice_number,
+                       cp.name AS package_name, i.invoice_number, e_sold.name AS sold_by_name,
                        (SELECT MIN(ii.service_date) FROM invoice_items ii WHERE ii.invoice_id = cpt.reference_id) AS service_date,
                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
                         FROM invoice_items ii
@@ -225,6 +225,7 @@ final class ReportRepository extends BaseRepository
                        COALESCE(cp.branch_address, b.name, '') AS branch
                  FROM customer_package_transactions cpt
                  LEFT JOIN customer_packages cp ON cp.id = cpt.customer_package_id
+                 LEFT JOIN employees e_sold ON e_sold.id = cp.sold_by
                  LEFT JOIN invoices i ON i.id = cpt.reference_id
                  LEFT JOIN branches b ON b.id = i.branch_id
                  WHERE cpt.customer_id = ? AND cpt.type <> 'debit'
