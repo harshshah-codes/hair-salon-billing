@@ -237,6 +237,7 @@ final class ReportRepository extends BaseRepository
                        ROUND(cpt.amount * g.amount / NULLIF(i.total, 0), 2) AS amount,
                        cp.credits AS credits, i.id AS reference_id,
                        cp.name AS package_name, i.invoice_number,
+                       NULL AS sold_by_name,
                        g.service_date,
                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
                         FROM invoice_items ii
@@ -263,6 +264,7 @@ final class ReportRepository extends BaseRepository
 
                 SELECT g.sort_id AS sort_id, i.created_at, 'bill' AS type, g.amount AS amount, 0 AS credits, i.id AS reference_id,
                        NULL AS package_name, i.invoice_number,
+                       NULL AS sold_by_name,
                        g.service_date,
                        (SELECT GROUP_CONCAT(CONCAT(ii.description, IF(ii.qty > 1, CONCAT(' x', ii.qty), '')) ORDER BY ii.id SEPARATOR '\n')
                         FROM invoice_items ii
